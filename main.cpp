@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -67,15 +68,32 @@ void spawnnode(editor_t* p_editor, double posx, double posy, logicgatetype_t log
 			{posx, posy}
 			},
 		.selected = false,
-		.in_pins = std::vector<pin_t>(),
-		.out_pins = std::vector<pin_t>(),
+		.in_pins = std::vector<pin_t>({{
+			.pos = {posx, posy},
+			.value = 0.l,
+			.selected = false
+		},{
+			.pos = {posx, posy},
+			.value = 0.l,
+			.selected = false
+		}}),
+		.out_pins = std::vector<pin_t>({{
+			.pos = {posx, posy},
+			.value = 0.l,
+			.selected = false
+		}}),
 		.H = funcs[logictype]
 		}
 	);
 }
 
-void spawnlink(double x, double y){
-
+void spawnlink(editor_t* p_editor, pin_t* p_in, pin_t* p_out){
+	p_editor->links.push_back({
+		.value = 0.l,
+		.in = p_in,
+		.out = p_out
+		}
+	);
 }
 
 void recenter_grid(editor_t* p_editor){
@@ -105,6 +123,12 @@ void showeditormenu(editor_t* p_editor){
 		}
 		if(ImGui::MenuItem("re-center the grid"))
 			recenter_grid(p_editor);
+		if(ImGui::MenuItem("SEGFAULT01"))
+			spawnlink(&editor, &editor.nodes[0].out_pins[0], &editor.nodes[1].in_pins[0]);
+		if(ImGui::MenuItem("SEGFAULT21"))
+			spawnlink(&editor, &editor.nodes[2].out_pins[0], &editor.nodes[1].in_pins[1]);
+		if(ImGui::MenuItem("SEGFAULT13"))
+			spawnlink(&editor, &editor.nodes[1].out_pins[0], &editor.nodes[3].in_pins[1]);
 		ImGui::EndPopup();
 	}
 }
@@ -203,6 +227,17 @@ void drawnodes(ImDrawList* drawlist){
 		                   editor.grid.offset[1] + ((q->pos[1] + (q->dims[1] / 2.l)) * editor.grid.scale));
 
 		drawlist->AddImage(q->texID, p1, p2);
+		ImGui::Text("id = %lu\tval = %f", editor.nodes[i].id, editor.nodes[i].out_pins[0].value);
+	}
+}
+
+void drawlinks(ImDrawList* drawlist){
+	for(size_t i = 0; i < editor.links.size(); i++){
+		drawlist->AddLine(ImVec2((editor.grid.offset[0] + editor.links[i].in->pos[0]) * editor.grid.scale,
+		                            (editor.grid.offset[1] + editor.links[i].in->pos[1]) * editor.grid.scale),
+		                 ImVec2((editor.grid.offset[0] + editor.links[i].out->pos[0]) * editor.grid.scale,
+		                         (editor.grid.offset[1] + editor.links[i].out->pos[1]) * editor.grid.scale),
+		                  editor.links[i].value == 0 ? IM_COL32(255, 0, 0, 255) : IM_COL32(0, 255, 0, 255));
 	}
 }
 
@@ -254,6 +289,7 @@ void Dockspace(){
 	ImDrawList* drawlist = ImGui::GetWindowDrawList();
 	drawgrid(drawlist);
 	drawnodes(drawlist);
+	drawlinks(drawlist);
 	ImGui::End();
 }
 
@@ -324,6 +360,8 @@ int main(void){
 	float bgcolor[3] = {.2, .3, .3};
 
 	while(!glfwWindowShouldClose(window)){
+
+		process(&editor);
 
 		glClearColor(bgcolor[0], bgcolor[1], bgcolor[2], 1.);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);

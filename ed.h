@@ -1,3 +1,6 @@
+#ifndef ED_H
+#define ED_H
+
 #include "shader.h"
 #include <math.h>
 #include <stdint.h>
@@ -121,6 +124,7 @@ inline void process(editor_t* p_editor){
 	for(size_t i = 0; i < p_editor->links.size(); i++){
 		double value = p_editor->links[i].in->value;
 		p_editor->links[i].out->value = value;
+		p_editor->links[i].value = value;
 	}
 	
 }
@@ -143,6 +147,10 @@ void or_transfer(std::vector<pin_t>& in, std::vector<pin_t>& out){
 
 void nand_transfer(std::vector<pin_t>& in, std::vector<pin_t>& out){
 	out[0].value = !(in[0].value && in[1].value);
+	//out[0].value = 1.l;
+	//printf("wtf\n");
+	//if(in[0].value > 0.l && in[0].value > 0.l)
+	//	out[0].value = 0.l;
 }
 
 void nor_transfer(std::vector<pin_t>& in, std::vector<pin_t>& out){
@@ -156,3 +164,5 @@ void xor_transfer(std::vector<pin_t>& in, std::vector<pin_t>& out){
 void xnor_transfer(std::vector<pin_t>& in, std::vector<pin_t>& out){
 	out[0].value = in[0].value == in[1].value ? 0.l : 1.l;
 }
+
+#endif
