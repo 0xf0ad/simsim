@@ -1,8 +1,7 @@
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <math.h>
 #include "components.h"
 #include "libs/imgui/imgui.h"
 #include "libs/imgui/backends/imgui_impl_glfw.h"
@@ -16,6 +15,9 @@
 #define WIN_WIDTH 1280
 #define WIN_HEIGHT 720
 
+#define max(a, b) a > b ? a : b
+
+// ik global variables are bad but im not awware of any other methode as simple as this
 editor_t editor;
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height){
@@ -24,65 +26,64 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height){
 	editor.resol[0] = width, editor.resol[1] = height;
 }
 
-void mouse_callback(GLFWwindow* window, double xposIn, double yposIn){
+//void mouse_callback(GLFWwindow* window, double xposIn, double yposIn){
 	//for(uint64_t i = 0; i < editor.nodescount; i++){
 	//}
-}
+//}
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset){
 	// we use the segmoid function as x its input and yoffset as dx/dt and scale as output
 	static const double maxscale = 4.l, sensitivity = 20.l;
+	//initial value of x, the solution of f(x) = 1
 	static double x = -log(maxscale - 1.l);
-	double Mx, My;
-	//static double pMx = 0.l, pMy = 0.l;
-	//static double prevscale = editor.grid.scale;
-	glfwGetCursorPos(window, &Mx, &My);
+	double mousepos_towindow[2], mousepos_tocanvas[2];
+	glfwGetCursorPos(window, &mousepos_towindow[0], &mousepos_towindow[1]);
+	mousepos_tocanvas[0] = (mousepos_towindow[0] - editor.grid.offset[0]) / editor.grid.scale;
+	mousepos_tocanvas[1] = (mousepos_towindow[1] - editor.grid.offset[1]) / editor.grid.scale;
+
 	x += yoffset / sensitivity;
-	double prevoffset[2] = {editor.grid.offset[0], editor.grid.offset[1]};
-	double mousepos_tocanvasx = (Mx - editor.grid.offset[0]) / editor.grid.scale;
-	double mousepos_tocanvasy = (My - editor.grid.offset[1]) / editor.grid.scale;
 	editor.grid.scale = maxscale / (1.l + exp(-x));
-	editor.grid.offset[0] = Mx - (mousepos_tocanvasx * editor.grid.scale);
-	editor.grid.offset[1] = My - (mousepos_tocanvasy * editor.grid.scale);
+
+	editor.grid.offset[0] = mousepos_towindow[0] - (mousepos_tocanvas[0] * editor.grid.scale);
+	editor.grid.offset[1] = mousepos_towindow[1] - (mousepos_tocanvas[1] * editor.grid.scale);
 }
 
-void spawnnode(editor_t* editor, double posx, double posy, logicgatetype_t logictype){
-
-	static uint64_t ID = 0;
-
+void spawnnode(editor_t* p_editor, double posx, double posy, logicgatetype_t logictype){
 	const char* texturepath[] = {"undef", "buf", "not", "and", "nand", "or", "nor", "xor", "xnor"};
+	void (*funcs[])(std::vector<pin_t>&, std::vector<pin_t>&) = {NULL,&buffer_transfer, &not_transfer, &and_transfer, &nand_transfer, &or_transfer, &nor_transfer, &xor_transfer, &xnor_transfer};
+
 	// maxlen is lenth of "xnor" and "nand" wich is 4
 	size_t maxlen = sizeof("textures/logic/.png") + sizeof(texturepath[logictype]);
 	char path[maxlen+1];
 	snprintf(path, maxlen,"textures/logic/%s.png", texturepath[logictype]);
 
-	int w, h;
+	int weight, height;
 	// convert GLuint to ImTexture through void*
-	void* texture = (void*)(intptr_t)load_texture(path, &w, &h);
-	editor->nodes.push_back({
-		.id = ID++,
-		.in_pins = NULL,
-		.out_pins = NULL,
+	void* texture = (void*)(intptr_t)load_texture(path, &weight, &height);
+	p_editor->nodes.push_back({
+		.id = p_editor->nodescount++,
 		.quad = {texture,
-			{(double)w, (double)h},
+			{(double)weight, (double)height},
 			{posx, posy}
 			},
-		.selected = false
+		.selected = false,
+		.in_pins = std::vector<pin_t>(),
+		.out_pins = std::vector<pin_t>(),
+		.H = funcs[logictype]
 		}
 	);
-
 }
 
 void spawnlink(double x, double y){
 
 }
 
-void recenter_grid(editor_t* editor){
-	editor->grid.offset[0] = editor->resol[0] / 2.l;
-	editor->grid.offset[1] = editor->resol[1] / 2.l;
+void recenter_grid(editor_t* p_editor){
+	p_editor->grid.offset[0] = p_editor->resol[0] / 2.l;
+	p_editor->grid.offset[1] = p_editor->resol[1] / 2.l;
 }
 
-void showeditormenu(){
+void showeditormenu(editor_t* p_editor){
 	logicgatetype_t selectedtype = undeffined;
 	if(ImGui::BeginPopup("editor menu")){
 		ImVec2 mousepos = ImGui::GetMousePosOnOpeningCurrentPopup();
@@ -97,13 +98,13 @@ void showeditormenu(){
 			if(ImGui::MenuItem("xnor"))   selectedtype = xnorgate;
 			ImGui::EndMenu();
 			if(selectedtype != undeffined)
-				spawnnode(&editor,
+				spawnnode(p_editor,
 				          (mousepos.x - editor.grid.offset[0]) / editor.grid.scale,
 				          (mousepos.y - editor.grid.offset[1]) / editor.grid.scale,
 				          selectedtype);
 		}
 		if(ImGui::MenuItem("re-center the grid"))
-			recenter_grid(&editor);
+			recenter_grid(p_editor);
 		ImGui::EndPopup();
 	}
 }
@@ -134,7 +135,7 @@ void processInput(GLFWwindow* window, editor_t* editor){
 			rightpressed = false;
 			for(uint64_t i = 0; i < editor->nodescount; i++){
 				if(mouseovernode(x, y, &editor->nodes[i])){
-					show_node_menu(&editor->nodes[i]);
+					//show_node_menu(&editor->nodes[i]);
 					goto fuckoff;
 				}
 			}
@@ -180,15 +181,17 @@ void drawgrid(ImDrawList* drawlist){
 	    markY = editor.grid.offset[1] / lgrid;
 
 	// TODO: edit the function to draw only inside the canvas
-	drawlist->AddQuadFilled(ImVec2(editor.grid.offset[0]-10, editor.grid.offset[1]+10),
-	                        ImVec2(editor.grid.offset[0]+10, editor.grid.offset[1]+10),
-	                        ImVec2(editor.grid.offset[0]+10, editor.grid.offset[1]-10),
-	                        ImVec2(editor.grid.offset[0]-10, editor.grid.offset[1]-10),
+	drawlist->AddQuadFilled(ImVec2(editor.grid.offset[0] - 10, editor.grid.offset[1] + 10),
+	                        ImVec2(editor.grid.offset[0] + 10, editor.grid.offset[1] + 10),
+	                        ImVec2(editor.grid.offset[0] + 10, editor.grid.offset[1] - 10),
+	                        ImVec2(editor.grid.offset[0] - 10, editor.grid.offset[1] - 10),
 	                        ImColor(255, 0, 0, 255));
 	for(float x = fmodf(editor.grid.offset[0], lgrid); x < editor.resol[0]; x += lgrid, markX--)
-		drawlist->AddLine(ImVec2(x, 0.f), ImVec2(x, editor.resol[1]), markX % 8 ? IM_COL32(100, 100, 100, 128) : IM_COL32(255, 255, 255, 128));
+		drawlist->AddLine(ImVec2(x, 0.f), ImVec2(x, editor.resol[1]),
+		                  markX % 8 ? IM_COL32(100, 100, 100, 128) : IM_COL32(255, 255, 255, 128));
 	for(float y = fmodf(editor.grid.offset[1], lgrid); y < editor.resol[1]; y += lgrid, markY--)
-		drawlist->AddLine(ImVec2(0.f, y), ImVec2(editor.resol[0], y), markY % 8 ? IM_COL32(100, 100, 100, 128) : IM_COL32(255, 255, 255, 128));
+		drawlist->AddLine(ImVec2(0.f, y), ImVec2(editor.resol[0], y),
+		                  markY % 8 ? IM_COL32(100, 100, 100, 128) : IM_COL32(255, 255, 255, 128));
 }
 
 void drawnodes(ImDrawList* drawlist){
@@ -236,7 +239,6 @@ void Dockspace(){
 	ImGui::Begin("Simulation", nullptr, ImGuiWindowFlags_None);
 	ImGui::Text("Text");
 	ImGui::Text("(%.1f FPS)", ImGui::GetIO().Framerate);
-	ImGui::Text("scale: %f", editor.grid.scale);
 	ImGui::End();
 	
 	ImGui::Begin("Library", nullptr, ImGuiWindowFlags_None);
@@ -249,11 +251,9 @@ void Dockspace(){
 	ImGui::End();
 	
 	ImGui::Begin("Diagram", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-	ImGui::Text("offset: x=%f\ty=%f", editor.grid.offset[0], editor.grid.offset[1]);
-	ImGui::Text("mousePos : x= %f\ty=%f", ImGui::GetIO().MousePos.x, ImGui::GetIO().MousePos.y);
-	ImGui::Text("Mp : x= %f\ty=%f",  ImGui::GetIO().MousePos.x - editor.grid.offset[0], ImGui::GetIO().MousePos.y - editor.grid.offset[1]);
-	drawgrid(ImGui::GetWindowDrawList());
-	drawnodes(ImGui::GetWindowDrawList());
+	ImDrawList* drawlist = ImGui::GetWindowDrawList();
+	drawgrid(drawlist);
+	drawnodes(drawlist);
 	ImGui::End();
 }
 
@@ -287,13 +287,15 @@ int main(void){
 			.scale = 1.l,
 			.step = 64.l,
 			.offset = {0.l, 0.l},
-		}
+		},
+		.nodes = std::vector<node_t>(),
+		.links = std::vector<link_t>()
 	};
 
 	glfwMakeContextCurrent(window);
 	gladLoadGL();
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-	glfwSetCursorPosCallback(window, mouse_callback);
+	//glfwSetCursorPosCallback(window, mouse_callback);
 	glfwSetScrollCallback(window, scroll_callback);
 
 	if(!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)){
@@ -319,7 +321,6 @@ int main(void){
 	io.ConfigDockingWithShift = true;
 	io.ConfigWindowsResizeFromEdges = true;
 	io.IniFilename = "layout.ini";
-	float gridstep = 64.f;
 	float bgcolor[3] = {.2, .3, .3};
 
 	while(!glfwWindowShouldClose(window)){
@@ -338,7 +339,7 @@ int main(void){
 
 		//ImGui::ShowDemoWindow();
 		processInput(window, &editor);
-		showeditormenu();
+		showeditormenu(&editor);
 
 
 		ImGui::Render();

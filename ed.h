@@ -8,11 +8,13 @@
 
 typedef struct{
 	//position relative to node
-	float pos[2];
+	double pos[2];
+	double value;
 	bool selected;
 } pin_t;
 
 typedef struct{
+	double value;
 	pin_t* in;
 	pin_t* out;
 } link_t;
@@ -25,11 +27,13 @@ typedef struct{
 
 typedef struct{
 	uint64_t id;
-	pin_t* in_pins;
-	pin_t* out_pins;
 	Quad_t quad;
 	bool selected;
-	std::vector<pin_t>  pins;
+	std::vector<pin_t> in_pins;
+	std::vector<pin_t> out_pins;
+	// the tarnsfer function of the node
+	// take pointers of i/o pin and modify the output pins  
+	void (*H)(std::vector<pin_t>&, std::vector<pin_t>&);
 } node_t;
 
 typedef struct{
@@ -48,10 +52,6 @@ typedef struct{
 	std::vector<link_t> links;
 } editor_t;
 
-inline void loop(const editor_t* edtr){
-//TODO
-};
-
 inline void drawnodes(const editor_t* edtr){
 	for(uint64_t i = 0; i < edtr->nodescount; i++){
 		//TODO
@@ -64,10 +64,6 @@ inline bool mouseovernode(double x, double y, const node_t* node){
 	        x <= (node->quad.pos[0] - node->quad.dims[0]) &&
 	        y >= (node->quad.pos[1] + node->quad.dims[1]) &&
 	        y <= (node->quad.pos[1] - node->quad.dims[1]));
-};
-
-inline void show_node_menu(node_t* node){
-	//TODO
 };
 
 inline GLuint load_texture(const char* path, int* w, int* h){
@@ -114,4 +110,49 @@ inline GLuint load_texture(const char* path, int* w, int* h){
 	stbi_image_free(data);
 
 	return textureID;
+}
+
+inline void process(editor_t* p_editor){
+	for(size_t i = 0; i < p_editor->nodescount; i++){
+		node_t* node = &p_editor->nodes[i];
+		node->H(node->in_pins, node->out_pins);
+	}
+
+	for(size_t i = 0; i < p_editor->links.size(); i++){
+		double value = p_editor->links[i].in->value;
+		p_editor->links[i].out->value = value;
+	}
+	
+}
+
+void buffer_transfer(std::vector<pin_t>& in, std::vector<pin_t>& out){
+	out[0].value = in[0].value;
+}
+
+void not_transfer(std::vector<pin_t>& in, std::vector<pin_t>& out){
+	out[0].value = !in[0].value;
+}
+
+void and_transfer(std::vector<pin_t>& in, std::vector<pin_t>& out){
+	out[0].value = in[0].value && in[1].value;
+}
+
+void or_transfer(std::vector<pin_t>& in, std::vector<pin_t>& out){
+	out[0].value = in[0].value || in[1].value;
+}
+
+void nand_transfer(std::vector<pin_t>& in, std::vector<pin_t>& out){
+	out[0].value = !(in[0].value && in[1].value);
+}
+
+void nor_transfer(std::vector<pin_t>& in, std::vector<pin_t>& out){
+	out[0].value = !(in[0].value || in[1].value);
+}
+
+void xor_transfer(std::vector<pin_t>& in, std::vector<pin_t>& out){
+	out[0].value = in[0].value == in[1].value ? 1.l : 0.l;
+}
+
+void xnor_transfer(std::vector<pin_t>& in, std::vector<pin_t>& out){
+	out[0].value = in[0].value == in[1].value ? 0.l : 1.l;
 }

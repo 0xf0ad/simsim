@@ -17,8 +17,8 @@ else()
 	set(CMAKE_CXX_COMPILER g++)
 endif()
 
-set(CMAKE_CXX_FLAGS  "-Wall -Wextra -O3")
-set(CMAKE_C_FLAGS    "-Wall -Wextra -O3")
+set(CMAKE_CXX_FLAGS  "-fsanitize=address -Wall -Wextra -g")
+set(CMAKE_C_FLAGS    "-fsanitize=address -Wall -Wextra -g")
 set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS)
 
 project(gibmeaname)
