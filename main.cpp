@@ -196,12 +196,6 @@ void showeditormenu(editor_t* p_editor){
 		}
 		if(ImGui::MenuItem("re-center the grid"))
 			recenter_grid(p_editor);
-		if(ImGui::MenuItem("SEGFAULT01"))
-			spawnlink(&editor, &editor.nodes[0].out_pins[0], &editor.nodes[1].in_pins[0]);
-		if(ImGui::MenuItem("SEGFAULT21"))
-			spawnlink(&editor, &editor.nodes[2].out_pins[0], &editor.nodes[1].in_pins[1]);
-		if(ImGui::MenuItem("SEGFAULT13"))
-			spawnlink(&editor, &editor.nodes[1].out_pins[0], &editor.nodes[3].in_pins[0]);
 		ImGui::EndPopup();
 	}
 }
@@ -328,8 +322,6 @@ void drawnodes(ImDrawList* drawlist){
 
 			}
 		}
-
-		ImGui::Text("id = %lu\tval = %f", editor.nodes[i].id, editor.nodes[i].out_pins[0].value);
 	}
 }
 
@@ -388,7 +380,8 @@ void Dockspace(){
 	ImGui::End();
 	
 	ImGui::Begin("Explorer", nullptr, ImGuiWindowFlags_None);
-	ImGui::Text("bi3ochra %p", editor.connector);
+	for(size_t i = 0; i < editor.nodescount; i++)
+		ImGui::Text("id: %lu\toutput value: %lf", editor.nodes[i].id, editor.nodes[i].out_pins[0].value);
 	ImGui::End();
 	
 	ImGui::Begin("Properties", nullptr, ImGuiWindowFlags_None);
