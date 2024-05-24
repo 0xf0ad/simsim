@@ -123,8 +123,9 @@ inline void process(editor_t* p_editor){
 	}
 
 	for(size_t i = 0; i < p_editor->links.size(); i++){
-		double value = p_editor->links[i].in->value;
+		double value = p_editor->links[i].in->value || p_editor->links[i].out->value;
 		p_editor->links[i].out->value = value;
+		p_editor->links[i].in->value = value;
 		p_editor->links[i].value = value;
 	}
 	
