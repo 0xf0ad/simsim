@@ -27,10 +27,64 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height){
 	editor.resol[0] = width, editor.resol[1] = height;
 }
 
-//void mouse_callback(GLFWwindow* window, double xposIn, double yposIn){
-	//for(uint64_t i = 0; i < editor.nodescount; i++){
-	//}
-//}
+void spawnlink(editor_t* p_editor, pin_t* p_in, pin_t* p_out){
+	if(p_in != p_out)
+		p_editor->links.push_back({
+			.value = 0.l,
+			.in = p_in,
+			.out = p_out
+			}
+		);
+}
+
+void checklinks(editor_t* p_editor, double xpos, double ypos, bool mousebuttonpressed){
+	const double mindistance = 10.l * p_editor->grid.scale;
+	static bool pinisselected = false;
+	for(size_t i = 0; i < p_editor->nodescount; i++){
+		for(size_t j = 0; j < p_editor->nodes[i].in_pins.size(); j++){
+			double x = (xpos - p_editor->grid.offset[0] - (p_editor->nodes[i].in_pins[j].pos[0] * p_editor->grid.scale));
+			double y = (ypos - p_editor->grid.offset[1] - (p_editor->nodes[i].in_pins[j].pos[1] * p_editor->grid.scale));
+			if((x * x + y * y) < (mindistance * mindistance)){
+				if(mousebuttonpressed == GLFW_PRESS && !p_editor->connector){
+					p_editor->nodes[i].in_pins[j].selected = true;
+					pinisselected = true;
+					p_editor->connector = &p_editor->nodes[i].in_pins[j];
+				}
+				else if(mousebuttonpressed == GLFW_RELEASE && p_editor->connector){
+					spawnlink(p_editor, &p_editor->nodes[i].in_pins[j], p_editor->connector);
+					p_editor->nodes[i].in_pins[j].selected = false;
+					pinisselected = false;
+					p_editor->connector = NULL;
+				}
+			}
+		}
+		for(size_t j = 0; j < p_editor->nodes[i].out_pins.size(); j++){
+			double x = (xpos - p_editor->grid.offset[0] - (p_editor->nodes[i].out_pins[j].pos[0] * p_editor->grid.scale));
+			double y = (ypos - p_editor->grid.offset[1] - (p_editor->nodes[i].out_pins[j].pos[1] * p_editor->grid.scale));
+			if((x * x + y * y) < (mindistance * mindistance)){
+				if(mousebuttonpressed == GLFW_PRESS && !p_editor->connector){
+					p_editor->nodes[i].out_pins[j].selected = true;
+					pinisselected = true;
+					p_editor->connector = &p_editor->nodes[i].out_pins[j];
+				}
+				else if(mousebuttonpressed == GLFW_RELEASE && p_editor->connector){
+					spawnlink(p_editor, p_editor->connector, &p_editor->nodes[i].out_pins[j]);
+					p_editor->nodes[i].out_pins[j].selected = false;
+					pinisselected = false;
+					p_editor->connector = NULL;
+				}
+			}
+		}
+	}
+	if(mousebuttonpressed == GLFW_RELEASE && pinisselected){
+		if(p_editor->connector)
+			p_editor->connector->selected = false;
+		p_editor->connector = NULL;
+	}
+}
+
+void mouse_callback(GLFWwindow* window, double xpos, double ypos){
+}
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset){
 	// we use the segmoid function as x its input and yoffset as dx/dt and scale as output
@@ -51,7 +105,17 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset){
 
 void spawnnode(editor_t* p_editor, double posx, double posy, logicgatetype_t logictype){
 	const char* texturepath[] = {"undef", "buf", "not", "and", "nand", "or", "nor", "xor", "xnor"};
-	void (*funcs[])(std::vector<pin_t>&, std::vector<pin_t>&) = {NULL,&buffer_transfer, &not_transfer, &and_transfer, &nand_transfer, &or_transfer, &nor_transfer, &xor_transfer, &xnor_transfer};
+	void (*funcs[])(std::vector<pin_t>&, std::vector<pin_t>&) = {NULL,
+	                                                             &buffer_transfer,
+	                                                             &not_transfer,
+	                                                             &and_transfer,
+	                                                             &nand_transfer,
+	                                                             &or_transfer,
+	                                                             &nor_transfer,
+	                                                             &xor_transfer,
+	                                                             &xnor_transfer};
+	size_t num_input_pins[] = {0, 1, 1, 2, 2, 2, 2, 2, 2};
+	size_t num_output_pins[] = {0, 1, 1, 1, 1, 1, 1, 1, 1};
 
 	// maxlen is lenth of "xnor" and "nand" wich is 4
 	size_t maxlen = sizeof("textures/logic/.png") + sizeof(texturepath[logictype]);
@@ -61,40 +125,49 @@ void spawnnode(editor_t* p_editor, double posx, double posy, logicgatetype_t log
 	int weight, height;
 	// convert GLuint to ImTexture through void*
 	void* texture = (void*)(intptr_t)load_texture(path, &weight, &height);
+
+	std::vector<pin_t> ins, outs;
+	ins.reserve(num_input_pins[logictype]);
+	for(size_t i = 0; i < num_input_pins[logictype]; i++){
+		ins.emplace_back();
+		ins[i] = {
+			.pos = {posx - ((double)weight / 2),
+			        posy + ((double)(height * (int64_t)((i << 1) - num_input_pins[logictype] + 1))) 
+			        / ((double)((num_input_pins[logictype] << 1) + 2))
+			},
+			.value = 0.l,
+			.selected = false
+		};
+	}
+
+	outs.reserve(num_output_pins[logictype]);
+	for(size_t i = 0; i < num_output_pins[logictype]; i++){
+		outs.emplace_back();
+		outs[i] = {
+			.pos = {posx + ((double)(weight) / 2),
+			        posy + ((double)(height * (int64_t)((i << 1) - num_output_pins[logictype] + 1))) 
+			         / ((double)((num_output_pins[logictype] << 1) + 2))
+			},
+			.value = 0.l,
+			.selected = false
+		};
+	}
+
 	p_editor->nodes.push_back({
 		.id = p_editor->nodescount++,
-		.quad = {texture,
-			{(double)weight, (double)height},
-			{posx, posy}
-			},
+		.quad = {.texID = texture,
+			.dims = {(double)weight, (double)height},
+			.pos = {posx, posy}
+		},
 		.selected = false,
-		.in_pins = std::vector<pin_t>({{
-			.pos = {posx, posy},
-			.value = 0.l,
-			.selected = false
-		},{
-			.pos = {posx, posy},
-			.value = 0.l,
-			.selected = false
-		}}),
-		.out_pins = std::vector<pin_t>({{
-			.pos = {posx, posy},
-			.value = 0.l,
-			.selected = false
-		}}),
+		.in_pins = ins,
+		.out_pins = outs,
 		.H = funcs[logictype]
 		}
 	);
 }
 
-void spawnlink(editor_t* p_editor, pin_t* p_in, pin_t* p_out){
-	p_editor->links.push_back({
-		.value = 0.l,
-		.in = p_in,
-		.out = p_out
-		}
-	);
-}
+
 
 void recenter_grid(editor_t* p_editor){
 	p_editor->grid.offset[0] = p_editor->resol[0] / 2.l;
@@ -128,7 +201,7 @@ void showeditormenu(editor_t* p_editor){
 		if(ImGui::MenuItem("SEGFAULT21"))
 			spawnlink(&editor, &editor.nodes[2].out_pins[0], &editor.nodes[1].in_pins[1]);
 		if(ImGui::MenuItem("SEGFAULT13"))
-			spawnlink(&editor, &editor.nodes[1].out_pins[0], &editor.nodes[3].in_pins[1]);
+			spawnlink(&editor, &editor.nodes[1].out_pins[0], &editor.nodes[3].in_pins[0]);
 		ImGui::EndPopup();
 	}
 }
@@ -227,17 +300,52 @@ void drawnodes(ImDrawList* drawlist){
 		                   editor.grid.offset[1] + ((q->pos[1] + (q->dims[1] / 2.l)) * editor.grid.scale));
 
 		drawlist->AddImage(q->texID, p1, p2);
+
+		// draw pins
+		for(size_t i = 0; i < editor.nodescount; i++){
+			for(size_t j = 0; j < editor.nodes[i].in_pins.size(); j++){
+				ImVec2 pos = ImVec2((editor.nodes[i].in_pins[j].pos[0] * editor.grid.scale) + editor.grid.offset[0],
+				                    (editor.nodes[i].in_pins[j].pos[1] * editor.grid.scale) + editor.grid.offset[1]);
+
+				ImColor color = IM_COL32(255, 255, 0, 255);
+				if(editor.nodes[i].in_pins[j].selected){
+					color = IM_COL32(0, 255, 0, 255);
+				}
+
+				drawlist->AddCircle(pos, 10.l * editor.grid.scale, color);
+			}
+			for(size_t j = 0; j < editor.nodes[i].out_pins.size(); j++){
+				ImVec2 pos = ImVec2((editor.nodes[i].out_pins[j].pos[0] * editor.grid.scale) + editor.grid.offset[0],
+				                    (editor.nodes[i].out_pins[j].pos[1] * editor.grid.scale) + editor.grid.offset[1]);
+
+
+				ImColor color = IM_COL32(255, 255, 0, 255);
+				if(editor.nodes[i].out_pins[j].selected){
+					color = IM_COL32(0, 255, 0, 255);
+				}
+
+				drawlist->AddCircle(pos, 10.l * editor.grid.scale, color);
+
+			}
+		}
+
 		ImGui::Text("id = %lu\tval = %f", editor.nodes[i].id, editor.nodes[i].out_pins[0].value);
 	}
 }
 
 void drawlinks(ImDrawList* drawlist){
 	for(size_t i = 0; i < editor.links.size(); i++){
-		drawlist->AddLine(ImVec2((editor.grid.offset[0] + editor.links[i].in->pos[0]) * editor.grid.scale,
-		                            (editor.grid.offset[1] + editor.links[i].in->pos[1]) * editor.grid.scale),
-		                 ImVec2((editor.grid.offset[0] + editor.links[i].out->pos[0]) * editor.grid.scale,
-		                         (editor.grid.offset[1] + editor.links[i].out->pos[1]) * editor.grid.scale),
+		drawlist->AddLine(ImVec2(editor.grid.offset[0] +(editor.links[i].in->pos[0] * editor.grid.scale),
+		                            (editor.grid.offset[1] + (editor.links[i].in->pos[1] * editor.grid.scale))),
+		                 ImVec2(editor.grid.offset[0] + (editor.links[i].out->pos[0] * editor.grid.scale),
+		                         editor.grid.offset[1] + (editor.links[i].out->pos[1] * editor.grid.scale)),
 		                  editor.links[i].value == 0 ? IM_COL32(255, 0, 0, 255) : IM_COL32(0, 255, 0, 255));
+	}
+	if(editor.connector){
+		drawlist->AddLine(ImVec2((editor.connector->pos[0] * editor.grid.scale) + editor.grid.offset[0],
+		                             (editor.connector->pos[1] * editor.grid.scale) + editor.grid.offset[1]),
+		                  ImGui::GetMousePos(),
+		                  editor.connector->value ? IM_COL32(0, 255, 0, 255) : IM_COL32(255, 0, 0, 255));
 	}
 }
 
@@ -280,6 +388,7 @@ void Dockspace(){
 	ImGui::End();
 	
 	ImGui::Begin("Explorer", nullptr, ImGuiWindowFlags_None);
+	ImGui::Text("bi3ochra %p", editor.connector);
 	ImGui::End();
 	
 	ImGui::Begin("Properties", nullptr, ImGuiWindowFlags_None);
@@ -331,7 +440,7 @@ int main(void){
 	glfwMakeContextCurrent(window);
 	gladLoadGL();
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-	//glfwSetCursorPosCallback(window, mouse_callback);
+	glfwSetCursorPosCallback(window, mouse_callback);
 	glfwSetScrollCallback(window, scroll_callback);
 
 	if(!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)){
@@ -358,8 +467,12 @@ int main(void){
 	io.ConfigWindowsResizeFromEdges = true;
 	io.IniFilename = "layout.ini";
 	float bgcolor[3] = {.2, .3, .3};
+	double mousex, mousey;
 
 	while(!glfwWindowShouldClose(window)){
+
+		glfwGetCursorPos(window, &mousex, &mousey);
+		checklinks(&editor, mousex, mousey, glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT));
 
 		process(&editor);
 

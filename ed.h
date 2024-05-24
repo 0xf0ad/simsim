@@ -51,6 +51,7 @@ typedef struct{
 	uint64_t nodescount;
 	uint16_t resol[2];
 	grid_t grid;
+	pin_t* connector;
 	std::vector<node_t> nodes;
 	std::vector<link_t> links;
 } editor_t;
@@ -147,10 +148,6 @@ void or_transfer(std::vector<pin_t>& in, std::vector<pin_t>& out){
 
 void nand_transfer(std::vector<pin_t>& in, std::vector<pin_t>& out){
 	out[0].value = !(in[0].value && in[1].value);
-	//out[0].value = 1.l;
-	//printf("wtf\n");
-	//if(in[0].value > 0.l && in[0].value > 0.l)
-	//	out[0].value = 0.l;
 }
 
 void nor_transfer(std::vector<pin_t>& in, std::vector<pin_t>& out){
