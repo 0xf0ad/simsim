@@ -1,4 +1,3 @@
-#include <cstddef>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -27,12 +26,14 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height){
 	editor.resol[0] = width, editor.resol[1] = height;
 }
 
-void spawnlink(editor_t* p_editor, pin_t* p_in, pin_t* p_out){
-	if(p_in != p_out)
+void spawnlink(editor_t* p_editor, pin_t* pin0, pin_t* pin1){
+	if(pin0 != pin1)
 		p_editor->links.push_back({
 			.value = 0.l,
-			.in = p_in,
-			.out = p_out
+			.in =  pin0->type == input ? pin0 : pin1,
+			// the out is just the inverse of the in
+			// TODO: better write this line
+			.out = pin0->type == input ? pin1 : pin0,
 			}
 		);
 }
@@ -104,51 +105,40 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset){
 }
 
 void spawnnode(editor_t* p_editor, double posx, double posy, logicgatetype_t logictype){
-	const char* texturepath[] = {"undef", "buf", "not", "and", "nand", "or", "nor", "xor", "xnor"};
-	void (*funcs[])(std::vector<pin_t>&, std::vector<pin_t>&) = {NULL,
-	                                                             &buffer_transfer,
-	                                                             &not_transfer,
-	                                                             &and_transfer,
-	                                                             &nand_transfer,
-	                                                             &or_transfer,
-	                                                             &nor_transfer,
-	                                                             &xor_transfer,
-	                                                             &xnor_transfer};
-	size_t num_input_pins[] = {0, 1, 1, 2, 2, 2, 2, 2, 2};
-	size_t num_output_pins[] = {0, 1, 1, 1, 1, 1, 1, 1, 1};
-
 	// maxlen is lenth of "xnor" and "nand" wich is 4
-	size_t maxlen = sizeof("textures/logic/.png") + sizeof(texturepath[logictype]);
+	size_t maxlen = sizeof("textures/logic/.png") + sizeof(nodes[logictype].name);
 	char path[maxlen+1];
-	snprintf(path, maxlen,"textures/logic/%s.png", texturepath[logictype]);
+	snprintf(path, maxlen,"textures/logic/%s.png", nodes[logictype].name);
 
 	int weight, height;
 	// convert GLuint to ImTexture through void*
 	void* texture = (void*)(intptr_t)load_texture(path, &weight, &height);
 
 	std::vector<pin_t> ins, outs;
-	ins.reserve(num_input_pins[logictype]);
-	for(size_t i = 0; i < num_input_pins[logictype]; i++){
+	ins.reserve(nodes[logictype].numinputs);
+	for(size_t i = 0; i < nodes[logictype].numinputs; i++){
 		ins.emplace_back();
 		ins[i] = {
 			.pos = {posx - ((double)weight / 2),
-			        posy + ((double)(height * (int64_t)((i << 1) - num_input_pins[logictype] + 1))) 
-			        / ((double)((num_input_pins[logictype] << 1) + 2))
+			        posy + ((double)(height * (int64_t)((i << 1) - nodes[logictype].numinputs + 1))) 
+			        / ((double)((nodes[logictype].numinputs << 1) + 2))
 			},
 			.value = 0.l,
+			.type = input,
 			.selected = false
 		};
 	}
 
-	outs.reserve(num_output_pins[logictype]);
-	for(size_t i = 0; i < num_output_pins[logictype]; i++){
+	outs.reserve(nodes[logictype].numoutputs);
+	for(size_t i = 0; i < nodes[logictype].numoutputs; i++){
 		outs.emplace_back();
 		outs[i] = {
 			.pos = {posx + ((double)(weight) / 2),
-			        posy + ((double)(height * (int64_t)((i << 1) - num_output_pins[logictype] + 1))) 
-			         / ((double)((num_output_pins[logictype] << 1) + 2))
+			        posy + ((double)(height * (int64_t)((i << 1) - nodes[logictype].numoutputs + 1))) 
+			         / ((double)((nodes[logictype].numoutputs << 1) + 2))
 			},
 			.value = 0.l,
+			.type = output,
 			.selected = false
 		};
 	}
@@ -162,11 +152,10 @@ void spawnnode(editor_t* p_editor, double posx, double posy, logicgatetype_t log
 		.selected = false,
 		.in_pins = ins,
 		.out_pins = outs,
-		.H = funcs[logictype]
+		.H = nodes[logictype].H
 		}
 	);
 }
-
 
 
 void recenter_grid(editor_t* p_editor){
@@ -175,25 +164,17 @@ void recenter_grid(editor_t* p_editor){
 }
 
 void showeditormenu(editor_t* p_editor){
-	logicgatetype_t selectedtype = undeffined;
 	if(ImGui::BeginPopup("editor menu")){
 		ImVec2 mousepos = ImGui::GetMousePosOnOpeningCurrentPopup();
 		if(ImGui::BeginMenu("add a logic gate")){
-			if(ImGui::MenuItem("buffer")) selectedtype = buffergate;
-			if(ImGui::MenuItem("not"))    selectedtype = notgate;
-			if(ImGui::MenuItem("and"))    selectedtype = andgate;
-			if(ImGui::MenuItem("nand"))   selectedtype = nandgate;
-			if(ImGui::MenuItem("or"))     selectedtype = orgate;
-			if(ImGui::MenuItem("nor"))    selectedtype = norgate;
-			if(ImGui::MenuItem("xor"))    selectedtype = xorgate;
-			if(ImGui::MenuItem("xnor"))   selectedtype = xnorgate;
+			for(uint32_t i = 1; i < sizeof(nodes)/sizeof(nodes[0]); i++)
+				if(ImGui::MenuItem(nodes[i].name))
+					spawnnode(p_editor,
+					          (mousepos.x - editor.grid.offset[0]) / editor.grid.scale,
+					          (mousepos.y - editor.grid.offset[1]) / editor.grid.scale,
+					          nodes[i].type);
 			ImGui::EndMenu();
-			if(selectedtype != undeffined)
-				spawnnode(p_editor,
-				          (mousepos.x - editor.grid.offset[0]) / editor.grid.scale,
-				          (mousepos.y - editor.grid.offset[1]) / editor.grid.scale,
-				          selectedtype);
-		}
+	}
 		if(ImGui::MenuItem("re-center the grid"))
 			recenter_grid(p_editor);
 		ImGui::EndPopup();
@@ -426,6 +407,7 @@ int main(void){
 			.step = 64.l,
 			.offset = {0.l, 0.l},
 		},
+		.connector = NULL,
 		.nodes = std::vector<node_t>(),
 		.links = std::vector<link_t>()
 	};

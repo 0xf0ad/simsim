@@ -7,4 +7,3 @@ cd $BUILDDIR
 cmake $1 ..
 cmake --build .
 cd ../
-
