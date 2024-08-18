@@ -17,8 +17,8 @@ else()
 	set(CMAKE_CXX_COMPILER g++)
 endif()
 
-set(CMAKE_CXX_FLAGS  "-fsanitize=address -Wall -Wextra -g")
-set(CMAKE_C_FLAGS    "-fsanitize=address -Wall -Wextra -g")
+set(CMAKE_CXX_FLAGS  "-Wall -Wextra -g")
+set(CMAKE_C_FLAGS    "-Wall -Wextra -g")
 set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS)
 
 project(gibmeaname)
@@ -37,7 +37,7 @@ file(GLOB_RECURSE cppsource CONFIGURE_DEPENDS "main.cpp")
 file(GLOB_RECURSE csource   CONFIGURE_DEPENDS "")
 
 add_executable(sim ${csource} ${cppsource})
-target_link_libraries(sim ${OPENGL_LIBRARIES} glad stb_image imgui)
+target_link_libraries(sim ${OPENGL_LIBRARIES} glad stb_image imgui ginac cln)
 
 if(CMAKE_SYSTEM_NAME MATCHES "Windows")
 	target_link_libraries(sim -lm -lgdi32 -luser32 -lkernel32)

@@ -6,6 +6,38 @@
 #include <stdlib.h>
 
 typedef struct{
+	double R;
+	double I;
+} complex_t;
+
+#define complex_number(a, b) (complex_t){.R = a, .I = b};
+
+inline complex_t add_complexe(complex_t* a, complex_t* b){
+	return {
+		.R = a->R + b->R,
+		.I = a->I + b->I
+	};
+}
+
+inline complex_t sub_complexe(complex_t* a, complex_t* b){
+	return {
+		.R = a->R - b->R,
+		.I = a->I - b->I
+	};
+}
+inline void scale_complexe(complex_t* a, double s){
+	a->R *= s;
+	a->I *= s;
+}
+
+inline complex_t mul_complexe(complex_t* a, complex_t* b){
+	return {
+		.R = (a->R * b->R) - (a->I * b->I),
+		.I = (a->R * b->I) + (a->I * b->R)
+	};
+}
+
+typedef struct{
 	uint64_t size[2];
 	double** entries;
 } matrix_t;
@@ -20,7 +52,7 @@ inline void init_matrix(matrix_t* mat, uint64_t n, uint64_t m){
 inline void fill_zeros(matrix_t* mat){
 	for(uint64_t i = 0; i < mat->size[0]; i++)
 		for(uint64_t j = 0; j < mat->size[1]; j++)
-			mat->entries[i][j] = 0;
+			mat->entries[i][j] = 0.l;
 }
 
 inline void free_mat(matrix_t* mat){
