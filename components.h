@@ -14,7 +14,7 @@ typedef struct{
 enum component_type{
 	// TODO: expand
 	undefined,
-	resestor,
+	resistor,
 	inductor,
 	capacitor,
 	coupled_inductors,
@@ -58,9 +58,10 @@ struct component_t{
 	double caracteristic;
 	// represent the node that are connected to anode and cathode
 	// TODO: make it a pin_t[]
-	pin_t n, p;
+	//pin_t n, p;
 	// these are reserved to dependent votage and curren sources
-	pin_t cn, cp;
+	//pin_t cn, cp;
+	pin_t pins[4];
 	//TODO: make em component_t[]
 	// this becume important with current controlled sources
 	union{
@@ -90,16 +91,16 @@ typedef struct{
 
 component_def_t components[] = {
 	{undefined,             2, "",                                  ""},
-	{resestor,              2, "resestor",                          "R"},
+	{resistor,              2, "resistor",                          "R"},
 	{inductor,              2, "inductor",                          "L"},
 	{capacitor,             2, "capacitor",                         "C"},
 	{coupled_inductors,     4, "coupled inductors",                 "K"},
-	{indp_voltage_source,   4, "voltage source",                    "V"},
-	{indp_current_source,   4, "current source",                    "I"},
+	{indp_voltage_source,   2, "voltage source",                    "V"},
+	{indp_current_source,   2, "current source",                    "I"},
 	{volt_cont_volt_source, 4, "voltage controlled voltage source", "VCVS"},
 	{volt_cont_curr_source, 4, "voltage controlled current source", "VCCS"},
-	{curr_cont_volt_source, 4, "current controlled voltage source", "CCVS"},
-	{curr_cont_curr_source, 4, "current controlled current source", "CCCS" /*soviet moment*/ },
+	{curr_cont_volt_source, 2, "current controlled voltage source", "CCVS"},
+	{curr_cont_curr_source, 2, "current controlled current source", "CCCS" /*soviet moment*/ },
 	{operational_amplifier, 3, "operational amplifier",             "OpAmp"}
 };
 

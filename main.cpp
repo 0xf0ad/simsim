@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -78,17 +79,15 @@ void spawn_comp(editor_t* p_editor, double posx, double posy, component_type com
 	int weight, height;
 	// convert GLuint to ImTexture through void*
 	void* texture = (void*)(intptr_t)load_texture(path, &weight, &height);
-	double xoffset = (weight >> 1);
-	double yoffset = (height >> 1);
 
 	component_t comp = {
 		.id = get_num_elements(p_editor, comp_type),
 		.defenition = components[comp_type],
 		.caracteristic = 1.l,
-		.n  = {.pos = {posx + xoffset, posy}, .connected_node = NULL, .selected = false},
-		.p  = {.pos = {posx - xoffset, posy}, .connected_node = NULL, .selected = false},
-		.cn = {.pos = {posx + xoffset, posy}, .connected_node = NULL, .selected = false},
-		.cp = {.pos = {posx - xoffset, posy}, .connected_node = NULL, .selected = false},
+		.pins  = {{.pos = {0, 0}, .connected_node = NULL, .selected = false},
+		          {.pos = {0, 0}, .connected_node = NULL, .selected = false},
+		          {.pos = {0, 0}, .connected_node = NULL, .selected = false},
+		          {.pos = {0, 0}, .connected_node = NULL, .selected = false}},
 		.L1 = NULL,
 		.L2 = NULL,
 		.quad = {
@@ -168,19 +167,14 @@ void processInput(GLFWwindow* window, editor_t* editor){
 	if(glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT)){
 		// BUG: if 2 pins are located less than minimum, the last placed one is the one selected
 		for(uint64_t i = 0; i < editor->components.size(); i++){
-			double diffx = x - editor->components[i].n.pos[0];
-			double diffy = y - editor->components[i].n.pos[1];
-			if((diffx*diffx + diffy*diffy) < minimum * minimum && !pin_was_selected){
-				editor->components[i].n.selected = true;
-				editor->connector = &editor->components[i].n;
-				pin_was_selected = true;
-			}
-			diffx = x - editor->components[i].p.pos[0];
-			diffy = y - editor->components[i].p.pos[1];
-			if((diffx*diffx + diffy*diffy) < minimum * minimum && !pin_was_selected){
-				editor->components[i].p.selected = true;
-				editor->connector = &editor->components[i].p;
-				pin_was_selected = true;
+			for(uint64_t j = 0; j < editor->components[i].defenition.num_pins; j++){
+				double diffx = x - editor->components[i].pins[j].pos[0];
+				double diffy = y - editor->components[i].pins[j].pos[1];
+				if((diffx*diffx + diffy*diffy) < minimum * minimum && !pin_was_selected){
+					editor->components[i].pins[j].selected = true;
+					editor->connector = &editor->components[i].pins[j];
+					pin_was_selected = true;
+				}
 			}
 			if(mouse_over_quad(editor, x, y, &editor->components[i].quad)){
 				// select component
@@ -190,14 +184,12 @@ void processInput(GLFWwindow* window, editor_t* editor){
 	}if(glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_RELEASE){
 		if(pin_was_selected){
 			for(uint64_t i = 0; i < editor->components.size(); i++){
-				double diffx = x - editor->components[i].n.pos[0];
-				double diffy = y - editor->components[i].n.pos[1];
-				if((diffx*diffx + diffy*diffy) < minimum * minimum)
-					spawnlink(editor, editor->connector, &editor->components[i].n);
-				diffx = x - editor->components[i].p.pos[0];
-				diffy = y - editor->components[i].p.pos[1];
-				if((diffx*diffx + diffy*diffy) < minimum * minimum)
-					spawnlink(editor, editor->connector, &editor->components[i].p);
+				for(uint64_t j = 0; j < editor->components[i].defenition.num_pins; j++){
+					double diffx = x - editor->components[i].pins[j].pos[0];
+					double diffy = y - editor->components[i].pins[j].pos[1];
+					if((diffx*diffx + diffy*diffy) < minimum * minimum)
+						spawnlink(editor, editor->connector, &editor->components[i].pins[j]);
+				}
 			}
 			pin_was_selected = false;
 			editor->connector->selected = false;
@@ -281,32 +273,43 @@ void draw_comps(ImDrawList* drawlist){
 		const Quad_t* q = &editor.components[i].quad;
 		const double cosr = cos(q->rot), sinr = sin(q->rot);
 
-		ImVec2 p1, p2, p3, p4;
-		p1 = ImVec2(editor.grid.offset[0] + ((q->pos[0] - (((q->dims[0] * cosr) + (q->dims[1] * sinr)) / 2.l)) * editor.grid.scale),
-		            editor.grid.offset[1] + ((q->pos[1] + (((q->dims[1] * cosr) - (q->dims[0] * sinr)) / 2.l)) * editor.grid.scale));
-		p2 = ImVec2(editor.grid.offset[0] + ((q->pos[0] + (((q->dims[0] * cosr) - (q->dims[1] * sinr)) / 2.l)) * editor.grid.scale),
-		            editor.grid.offset[1] + ((q->pos[1] + (((q->dims[1] * cosr) + (q->dims[0] * sinr)) / 2.l)) * editor.grid.scale));
-		p3 = ImVec2(editor.grid.offset[0] + ((q->pos[0] + (((q->dims[0] * cosr) + (q->dims[1] * sinr)) / 2.l)) * editor.grid.scale),
-		            editor.grid.offset[1] + ((q->pos[1] - (((q->dims[1] * cosr) - (q->dims[0] * sinr)) / 2.l)) * editor.grid.scale));
-		p4 = ImVec2(editor.grid.offset[0] + ((q->pos[0] - (((q->dims[0] * cosr) - (q->dims[1] * sinr)) / 2.l)) * editor.grid.scale),
-		            editor.grid.offset[1] + ((q->pos[1] - (((q->dims[1] * cosr) + (q->dims[0] * sinr)) / 2.l)) * editor.grid.scale));
+		ImVec2 p[4];
+		p[0] = ImVec2(editor.grid.offset[0] + ((q->pos[0] - (((q->dims[0] * cosr) + (q->dims[1] * sinr)) / 4.l)) * editor.grid.scale),
+		              editor.grid.offset[1] + ((q->pos[1] + (((q->dims[1] * cosr) - (q->dims[0] * sinr)) / 4.l)) * editor.grid.scale));
+		p[1] = ImVec2(editor.grid.offset[0] + ((q->pos[0] + (((q->dims[0] * cosr) - (q->dims[1] * sinr)) / 4.l)) * editor.grid.scale),
+		              editor.grid.offset[1] + ((q->pos[1] + (((q->dims[1] * cosr) + (q->dims[0] * sinr)) / 4.l)) * editor.grid.scale));
+		p[2] = ImVec2(editor.grid.offset[0] + ((q->pos[0] + (((q->dims[0] * cosr) + (q->dims[1] * sinr)) / 4.l)) * editor.grid.scale),
+		              editor.grid.offset[1] + ((q->pos[1] - (((q->dims[1] * cosr) - (q->dims[0] * sinr)) / 4.l)) * editor.grid.scale));
+		p[3] = ImVec2(editor.grid.offset[0] + ((q->pos[0] - (((q->dims[0] * cosr) - (q->dims[1] * sinr)) / 4.l)) * editor.grid.scale),
+		              editor.grid.offset[1] + ((q->pos[1] - (((q->dims[1] * cosr) + (q->dims[0] * sinr)) / 4.l)) * editor.grid.scale));
 
-		drawlist->AddImageQuad(q->texID, p1, p2, p3, p4);
+		drawlist->AddImageQuad(q->texID, p[0], p[1], p[2], p[3]);
+		//drawlist->AddCircleFilled(p[0], 10, IM_COL32(0, 0, 0, 255));
+		//drawlist->AddCircleFilled(p[1], 10, IM_COL32(0, 0, 0, 255));
+		//drawlist->AddCircleFilled(p[2], 10, IM_COL32(0, 0, 0, 255));
+		//drawlist->AddCircleFilled(p[3], 10, IM_COL32(0, 0, 0, 255));
 
-		ImVec2 npos = ImVec2((p1.x + p4.x) / 2, (p1.y + p4.y) / 2);
-		editor.components[i].n.pos[0] = npos.x, editor.components[i].n.pos[1] = npos.y;
-		ImVec2 ppos = ImVec2((p2.x + p3.x) / 2, (p2.y + p3.y) / 2);
-		editor.components[i].p.pos[0] = ppos.x, editor.components[i].p.pos[1] = ppos.y;
-		ImColor color = IM_COL32(0, 0, 0, 255);
-		if(editor.components[i].n.selected){
-			color = IM_COL32(0, 255, 0, 255);
+		ImVec2 npos;
+		for(uint64_t j = 0; j < editor.components[i].defenition.num_pins; j++){
+			uint8_t indices[] = {0, 1, 3, 2};
+			uint8_t a = indices[j%2], b = indices[(j%2) + 2];
+			if(editor.components[i].defenition.num_pins == 2)
+				npos = ImVec2((p[a].x + p[b].x) / 2, (p[a].y + p[b].y) / 2);
+			else if(editor.components[i].defenition.num_pins == 3)
+				if(j == 1)
+					npos = ImVec2((p[a].x + p[b].x) / 2,(p[a].y + p[b].y) / 2);
+				else
+					npos = ImVec2((p[a].x + p[b].x) / 2, (((j >> 1) + 1) * (p[a].y - p[b].y) / 3) + p[b].y);
+			else if(editor.components[i].defenition.num_pins == 4)
+					npos = ImVec2((((j >> 1) + 1) * (p[a].x - p[b].x) / 3) + p[b].x,
+				                  (((j >> 1) + 1) * (p[a].y - p[b].y) / 3) + p[b].y);
+			editor.components[i].pins[j].pos[0] = npos.x, editor.components[i].pins[j].pos[1] = npos.y;
+			ImColor color = IM_COL32(0, 0, 0, 255);
+			if(editor.components[i].pins[j].selected){
+				color = IM_COL32(0, 255, 0, 255);
+			}
+			drawlist->AddCircleFilled(npos, 7.5 * editor.grid.scale, color);
 		}
-		drawlist->AddCircleFilled(npos, 7.5 * editor.grid.scale, color);
-		color = IM_COL32(0, 0, 0, 255);
-		if(editor.components[i].p.selected){
-			color = IM_COL32(0, 255, 0, 255);
-		}
-		drawlist->AddCircleFilled(ppos, 7.5 * editor.grid.scale, color);
 	}
 }
 
@@ -370,7 +373,7 @@ void Dockspace(){
 	ImGui::Begin("Explorer", nullptr, ImGuiWindowFlags_None);
 	ImGui::Text("numnoded : %lu", get_num_nodes(&editor));
 	for(size_t i = 0; i < editor.components.size(); i++)
-		ImGui::Text("id: %s\tfrom: %lu to: %lu", editor.components[i].defenition.name, editor.components[i].n.connected_node ? editor.components[i].n.connected_node->id : -1, editor.components[i].p.connected_node ? editor.components[i].p.connected_node->id : -1);
+		ImGui::Text("id: %s\tfrom: %lu to: %lu", editor.components[i].defenition.name, editor.components[i].pins[0].connected_node ? editor.components[i].pins[0].connected_node->id : -1, editor.components[i].pins[1].connected_node ? editor.components[i].pins[1].connected_node->id : -1);
 	ImGui::End();
 
 	ImGui::Begin("Properties", nullptr, ImGuiWindowFlags_None);

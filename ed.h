@@ -1,10 +1,6 @@
 #ifndef ED_H
 #define ED_H
 
-#include <cassert>
-#include <cerrno>
-#include <cstdint>
-#include <cstdio>
 #include <ginac/basic.h>
 #include <ginac/matrix.h>
 #include <ginac/symbol.h>
@@ -47,13 +43,12 @@ typedef struct{
 
 inline bool mouse_over_quad(editor_t* editor, double x, double y, const Quad_t* quad){
 	bool result = 0;
-	if (x <= (editor->grid.offset[0] + ((quad->pos[0] + (quad->dims[0] / 2.l)) * editor->grid.scale)))
-	if (x >= (editor->grid.offset[0] + ((quad->pos[0] - (quad->dims[0] / 2.l)) * editor->grid.scale)))
-	if (y >= (editor->grid.offset[1] + ((quad->pos[1] - (quad->dims[1] / 2.l)) * editor->grid.scale)))
-	if (y <= (editor->grid.offset[1] + ((quad->pos[1] + (quad->dims[1] / 2.l)) * editor->grid.scale)))
+	if (x <= (editor->grid.offset[0] + ((quad->pos[0] + (quad->dims[0] / 4.l)) * editor->grid.scale)))
+	if (x >= (editor->grid.offset[0] + ((quad->pos[0] - (quad->dims[0] / 4.l)) * editor->grid.scale)))
+	if (y >= (editor->grid.offset[1] + ((quad->pos[1] - (quad->dims[1] / 4.l)) * editor->grid.scale)))
+	if (y <= (editor->grid.offset[1] + ((quad->pos[1] + (quad->dims[1] / 4.l)) * editor->grid.scale)))
 		result = true;
 	return result;
-
 };
 
 inline GLuint load_texture(const char* path, int* w, int* h){
@@ -146,10 +141,10 @@ inline void update_ids(node_t* node){
 inline void rm_node(editor_t* editor,node_t* node){
 	if(editor){
 		for(uint64_t i = 0; i < editor->components.size(); i++){
-			if(editor->components[i].n.connected_node == node)
-				editor->components[i].n.connected_node = NULL;
-			if(editor->components[i].p.connected_node == node)
-				editor->components[i].p.connected_node = NULL;
+			if(editor->components[i].pins[0].connected_node == node)
+				editor->components[i].pins[0].connected_node = NULL;
+			if(editor->components[i].pins[1].connected_node == node)
+				editor->components[i].pins[1].connected_node = NULL;
 		}
 	}
 
@@ -168,10 +163,10 @@ inline node_t* merge_nodes(editor_t* editor, node_t* node0, node_t* node1){
 
 	if(editor){
 		for(uint64_t i = 0; i < editor->components.size(); i++){
-			if(editor->components[i].n.connected_node == node1)
-				editor->components[i].n.connected_node = node0;
-			if(editor->components[i].p.connected_node == node1)
-				editor->components[i].p.connected_node = node0;
+			if(editor->components[i].pins[0].connected_node == node1)
+				editor->components[i].pins[0].connected_node = node0;
+			if(editor->components[i].pins[1].connected_node == node1)
+				editor->components[i].pins[0].connected_node = node0;
 		}
 	}
 
@@ -229,14 +224,14 @@ inline void constract_matrices(editor_t* p_editor){
 	GiNaC::matrix I(n, 1), Ev(m, 1);
 	for (uint64_t crnt_comp = 0; crnt_comp < p_editor->components.size(); crnt_comp++){
 		component_t* comp = &p_editor->components[crnt_comp];
-		if(comp->n.connected_node && comp->p.connected_node){
-			uint64_t i = comp->n.connected_node->id;
-			uint64_t j = comp->p.connected_node->id;
+		if(comp->pins[0].connected_node && comp->pins[1].connected_node){
+			uint64_t i = comp->pins[0].connected_node->id;
+			uint64_t j = comp->pins[1].connected_node->id;
 			switch(comp->defenition.type){
 				case undefined:{
 					assert(1);
 				}
-				case resestor:{
+				case resistor:{
 					GiNaC::symbol R(std::string(comp->defenition.abriv) + "_" + std::to_string(comp->id));
 					G(i, i) += 1/R;
 					G(i, j) -= 1/R;
@@ -289,8 +284,8 @@ inline void constract_matrices(editor_t* p_editor){
 					break;
 				}
 				case volt_cont_volt_source:{
-					uint64_t ci = comp->cn.connected_node->id;
-					uint64_t cj = comp->cp.connected_node->id;
+					uint64_t ci = comp->pins[2].connected_node->id;
+					uint64_t cj = comp->pins[3].connected_node->id;
 					GiNaC::symbol element(std::string(comp->defenition.abriv) + "_" + std::to_string(comp->id));
 					B(i, source_count) =  1;
 					B(j, source_count) = -1;
@@ -303,8 +298,8 @@ inline void constract_matrices(editor_t* p_editor){
 					break;
 				}
 				case volt_cont_curr_source:{
-					uint64_t ci = comp->cn.connected_node->id;
-					uint64_t cj = comp->cp.connected_node->id;
+					uint64_t ci = comp->pins[2].connected_node->id;
+					uint64_t cj = comp->pins[3].connected_node->id;
 					GiNaC::symbol idk(std::string(comp->defenition.abriv) + "_" + std::to_string(comp->id));
 					G(i, ci) += idk;
 					G(i, cj) -= idk;
@@ -334,7 +329,7 @@ inline void constract_matrices(editor_t* p_editor){
 					break;
 				}
 				case operational_amplifier:{
-					uint64_t ci = comp->cn.connected_node->id;
+					uint64_t ci = comp->pins[2].connected_node->id;
 					GiNaC::symbol idk(std::string(comp->defenition.abriv) + "_" + std::to_string(comp->id));
 					// ci = Vout (which is a votage source)
 					B(ci, source_count) =  1;
