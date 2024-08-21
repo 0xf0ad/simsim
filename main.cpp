@@ -81,7 +81,7 @@ void spawn_comp(editor_t* p_editor, double posx, double posy, component_type com
 	double xoffset = (weight >> 1);
 	double yoffset = (height >> 1);
 
-	p_editor->components.push_back({
+	component_t comp = {
 		.id = get_num_elements(p_editor, comp_type),
 		.defenition = components[comp_type],
 		.caracteristic = 1.l,
@@ -89,16 +89,29 @@ void spawn_comp(editor_t* p_editor, double posx, double posy, component_type com
 		.p  = {.pos = {posx - xoffset, posy}, .connected_node = NULL, .selected = false},
 		.cn = {.pos = {posx + xoffset, posy}, .connected_node = NULL, .selected = false},
 		.cp = {.pos = {posx - xoffset, posy}, .connected_node = NULL, .selected = false},
-		.Vcontroll = NULL,
 		.L1 = NULL,
 		.L2 = NULL,
 		.quad = {
 			.texID = texture,
-			.rotation = 0.l,
+			.rot = 0.l,
 			.dims = {(double)weight, (double)height},
 			.pos = {posx, posy}
 		},
-	});
+	};
+
+	if(comp_type == coupled_inductors){
+		comp.L1 = (component_t*) malloc(sizeof(component_t));
+		comp.L2 = (component_t*) malloc(sizeof(component_t));
+		comp.L1->id = get_num_elements(p_editor, inductor);
+		comp.L2->id = get_num_elements(p_editor, inductor);
+		comp.L1->defenition = components[inductor];
+		comp.L2->defenition = components[inductor];
+		comp.L1->caracteristic = 1.l;
+		comp.L2->caracteristic = 1.l;
+	}
+
+	p_editor->components.push_back(comp);
+
 }
 
 
@@ -129,7 +142,15 @@ void show_comp_menu(editor_t* editor){
 	if(ImGui::BeginPopup("component menu")){
 		if(ImGui::MenuItem("driping")){
 		}
-		if(ImGui::MenuItem("ktb m7ms")){}
+		if(editor->selected_components.size() == 1){
+			if(ImGui::MenuItem("properies")){
+				ImGui::Text("component settings");
+				const char* name[] = {"", "resestance", "inductance", "capacitance", "k", "voltage",
+				"current", "gain", "gain", "gain", "gain", ""};
+				ImGui::InputDouble(name[editor->selected_components[0]->defenition.type], &editor->selected_components[0]->caracteristic);
+				editor->selected_components.clear();
+			}
+		}
 		ImGui::EndPopup();
 	}
 }
@@ -139,6 +160,7 @@ void processInput(GLFWwindow* window, editor_t* editor){
 	static bool draged = false;
 	static bool rightpressed = false;
 	static bool pin_was_selected = false;
+	//static std::vector<double[2]> joints;
 	double minimum = 10;
 	double x, y;
 	glfwGetCursorPos(window, &x, &y);
@@ -146,15 +168,15 @@ void processInput(GLFWwindow* window, editor_t* editor){
 	if(glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT)){
 		// BUG: if 2 pins are located less than minimum, the last placed one is the one selected
 		for(uint64_t i = 0; i < editor->components.size(); i++){
-			double diffx = x - editor->grid.offset[0] - (editor->components[i].n.pos[0] * editor->grid.scale);
-			double diffy = y - editor->grid.offset[1] - (editor->components[i].n.pos[1] * editor->grid.scale);
+			double diffx = x - editor->components[i].n.pos[0];
+			double diffy = y - editor->components[i].n.pos[1];
 			if((diffx*diffx + diffy*diffy) < minimum * minimum && !pin_was_selected){
 				editor->components[i].n.selected = true;
 				editor->connector = &editor->components[i].n;
 				pin_was_selected = true;
 			}
-			diffx = x - editor->grid.offset[0] - (editor->components[i].p.pos[0] * editor->grid.scale);
-			diffy = y - editor->grid.offset[1] - (editor->components[i].p.pos[1] * editor->grid.scale);
+			diffx = x - editor->components[i].p.pos[0];
+			diffy = y - editor->components[i].p.pos[1];
 			if((diffx*diffx + diffy*diffy) < minimum * minimum && !pin_was_selected){
 				editor->components[i].p.selected = true;
 				editor->connector = &editor->components[i].p;
@@ -168,12 +190,12 @@ void processInput(GLFWwindow* window, editor_t* editor){
 	}if(glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_RELEASE){
 		if(pin_was_selected){
 			for(uint64_t i = 0; i < editor->components.size(); i++){
-				double diffx = x - editor->grid.offset[0] - (editor->components[i].n.pos[0] * editor->grid.scale);
-				double diffy = y - editor->grid.offset[1] - (editor->components[i].n.pos[1] * editor->grid.scale);
+				double diffx = x - editor->components[i].n.pos[0];
+				double diffy = y - editor->components[i].n.pos[1];
 				if((diffx*diffx + diffy*diffy) < minimum * minimum)
 					spawnlink(editor, editor->connector, &editor->components[i].n);
-				diffx = x - editor->grid.offset[0] - (editor->components[i].p.pos[0] * editor->grid.scale);
-				diffy = y - editor->grid.offset[1] - (editor->components[i].p.pos[1] * editor->grid.scale);
+				diffx = x - editor->components[i].p.pos[0];
+				diffy = y - editor->components[i].p.pos[1];
 				if((diffx*diffx + diffy*diffy) < minimum * minimum)
 					spawnlink(editor, editor->connector, &editor->components[i].p);
 			}
@@ -257,47 +279,45 @@ void drawgrid(ImDrawList* drawlist){
 void draw_comps(ImDrawList* drawlist){
 	for(uint32_t i = 0; i != editor.components.size(); i++){
 		const Quad_t* q = &editor.components[i].quad;
-		ImVec2 p1 = ImVec2(editor.grid.offset[0] + ((q->pos[0] - (q->dims[0] / 2.l)) * editor.grid.scale),
-		                   editor.grid.offset[1] + ((q->pos[1] - (q->dims[1] / 2.l)) * editor.grid.scale));
-		ImVec2 p2 = ImVec2(editor.grid.offset[0] + ((q->pos[0] + (q->dims[0] / 2.l)) * editor.grid.scale),
-		                   editor.grid.offset[1] + ((q->pos[1] + (q->dims[1] / 2.l)) * editor.grid.scale));
+		const double cosr = cos(q->rot), sinr = sin(q->rot);
 
-		drawlist->AddImage(q->texID, p1, p2);
+		ImVec2 p1, p2, p3, p4;
+		p1 = ImVec2(editor.grid.offset[0] + ((q->pos[0] - (((q->dims[0] * cosr) + (q->dims[1] * sinr)) / 2.l)) * editor.grid.scale),
+		            editor.grid.offset[1] + ((q->pos[1] + (((q->dims[1] * cosr) - (q->dims[0] * sinr)) / 2.l)) * editor.grid.scale));
+		p2 = ImVec2(editor.grid.offset[0] + ((q->pos[0] + (((q->dims[0] * cosr) - (q->dims[1] * sinr)) / 2.l)) * editor.grid.scale),
+		            editor.grid.offset[1] + ((q->pos[1] + (((q->dims[1] * cosr) + (q->dims[0] * sinr)) / 2.l)) * editor.grid.scale));
+		p3 = ImVec2(editor.grid.offset[0] + ((q->pos[0] + (((q->dims[0] * cosr) + (q->dims[1] * sinr)) / 2.l)) * editor.grid.scale),
+		            editor.grid.offset[1] + ((q->pos[1] - (((q->dims[1] * cosr) - (q->dims[0] * sinr)) / 2.l)) * editor.grid.scale));
+		p4 = ImVec2(editor.grid.offset[0] + ((q->pos[0] - (((q->dims[0] * cosr) - (q->dims[1] * sinr)) / 2.l)) * editor.grid.scale),
+		            editor.grid.offset[1] + ((q->pos[1] - (((q->dims[1] * cosr) + (q->dims[0] * sinr)) / 2.l)) * editor.grid.scale));
 
+		drawlist->AddImageQuad(q->texID, p1, p2, p3, p4);
 
-		// draw pins first pin
-		ImVec2 pos = ImVec2((editor.components[i].n.pos[0] * editor.grid.scale) + editor.grid.offset[0],
-							(editor.components[i].n.pos[1] * editor.grid.scale) + editor.grid.offset[1]);
-
-		ImColor color = IM_COL32(255, 0, 0, 255);
+		ImVec2 npos = ImVec2((p1.x + p4.x) / 2, (p1.y + p4.y) / 2);
+		editor.components[i].n.pos[0] = npos.x, editor.components[i].n.pos[1] = npos.y;
+		ImVec2 ppos = ImVec2((p2.x + p3.x) / 2, (p2.y + p3.y) / 2);
+		editor.components[i].p.pos[0] = ppos.x, editor.components[i].p.pos[1] = ppos.y;
+		ImColor color = IM_COL32(0, 0, 0, 255);
 		if(editor.components[i].n.selected){
 			color = IM_COL32(0, 255, 0, 255);
 		}
-		drawlist->AddCircle(pos, 10.l * editor.grid.scale, color);
-
-		// draw pins first pin
-		pos = ImVec2((editor.components[i].p.pos[0] * editor.grid.scale) + editor.grid.offset[0],
-					 (editor.components[i].p.pos[1] * editor.grid.scale) + editor.grid.offset[1]);
-
-		color = IM_COL32(255, 0, 0, 255);
+		drawlist->AddCircleFilled(npos, 7.5 * editor.grid.scale, color);
+		color = IM_COL32(0, 0, 0, 255);
 		if(editor.components[i].p.selected){
 			color = IM_COL32(0, 255, 0, 255);
 		}
-		drawlist->AddCircle(pos, 10.l * editor.grid.scale, color);
+		drawlist->AddCircleFilled(ppos, 7.5 * editor.grid.scale, color);
 	}
 }
 
 void drawlinks(ImDrawList* drawlist){
 	for(size_t i = 0; i < editor.links.size(); i++){
-		drawlist->AddLine(ImVec2(editor.grid.offset[0] +(editor.links[i].pins[0]->pos[0] * editor.grid.scale),
-		                            (editor.grid.offset[1] + (editor.links[i].pins[0]->pos[1] * editor.grid.scale))),
-		                 ImVec2(editor.grid.offset[0] + (editor.links[i].pins[1]->pos[0] * editor.grid.scale),
-		                         editor.grid.offset[1] + (editor.links[i].pins[1]->pos[1] * editor.grid.scale)),
-		                     IM_COL32(0, 0, 0, 255));
+		drawlist->AddLine(ImVec2(editor.links[i].pins[0]->pos[0], editor.links[i].pins[0]->pos[1]),
+		                  ImVec2(editor.links[i].pins[1]->pos[0], editor.links[i].pins[1]->pos[1]),
+		                 IM_COL32(0, 0, 0, 255));
 	}
 	if(editor.connector){
-		drawlist->AddLine(ImVec2((editor.connector->pos[0] * editor.grid.scale) + editor.grid.offset[0],
-		                             (editor.connector->pos[1] * editor.grid.scale) + editor.grid.offset[1]),
+		drawlist->AddLine(ImVec2(editor.connector->pos[0], editor.connector->pos[1]),
 		                  ImGui::GetMousePos(), IM_COL32(255, 0, 0, 255));
 	}
 }
@@ -337,13 +357,20 @@ void Dockspace(){
 	ImGui::Text("(%.1f FPS)", ImGui::GetIO().Framerate);
 	ImGui::End();
 
-	ImGui::Begin("Library", nullptr, ImGuiWindowFlags_None);
+	ImGui::Begin("Properties", nullptr, ImGuiWindowFlags_None);
+	if(editor.selected_components.size()){
+		for(auto compo : editor.selected_components){
+			ImGui::Text("%s %lu", compo->defenition.name, compo->id);
+			ImGui::SliderAngle("angle", &compo->quad.rot);
+			ImGui::Separator();
+		}
+	}
 	ImGui::End();
 
 	ImGui::Begin("Explorer", nullptr, ImGuiWindowFlags_None);
-	ImGui::Text("numnoded : %d", get_num_nodes(&editor));
+	ImGui::Text("numnoded : %lu", get_num_nodes(&editor));
 	for(size_t i = 0; i < editor.components.size(); i++)
-		ImGui::Text("id: %s\tfrom: %d to: %d", editor.components[i].defenition.name, editor.components[i].n.connected_node ? editor.components[i].n.connected_node->id : -1, editor.components[i].p.connected_node ? editor.components[i].p.connected_node->id : -1);
+		ImGui::Text("id: %s\tfrom: %lu to: %lu", editor.components[i].defenition.name, editor.components[i].n.connected_node ? editor.components[i].n.connected_node->id : -1, editor.components[i].p.connected_node ? editor.components[i].p.connected_node->id : -1);
 	ImGui::End();
 
 	ImGui::Begin("Properties", nullptr, ImGuiWindowFlags_None);
@@ -392,6 +419,8 @@ int main(void){
 		.connector = NULL,
 		.components = std::vector<component_t>(),
 		.links = std::vector<link_t>(),
+		.selected_components = std::vector<component_t*>(),
+		.selected_links = std::vector<link_t*>()
 	};
 
 	glfwMakeContextCurrent(window);

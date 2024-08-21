@@ -106,6 +106,11 @@ inline uint64_t get_num_elements(editor_t* editor, component_type type){
 	uint64_t count = 0;
 	for(auto i : editor->components)
 		count += (i.defenition.type == type);
+
+	// accumudate for unlisted inductors if they where coupled
+	if(type == inductor)
+		count += 2 * get_num_elements(editor, coupled_inductors);
+
 	return count;
 }
 
@@ -313,15 +318,16 @@ inline void constract_matrices(editor_t* p_editor){
 					B(j, source_count) = -1;
 					C(source_count, i) =  1;
 					C(source_count, j) = -1;
-					D(source_count, comp->Vcontroll->id) -= idk;
+					D(source_count, comp->Vcont->id) -= idk;
 					J(source_count, 0) = GiNaC::symbol("I_" + idk.get_name());
 					source_count++;
+					break;
 				}
 				case curr_cont_curr_source:{
 					GiNaC::symbol idk(std::string(comp->defenition.abriv) + "_" + std::to_string(comp->id));
 					B(i, source_count) =  1;
 					B(j, source_count) = -1;
-					D(source_count, comp->Vcontroll->id) -= idk;
+					D(source_count, comp->Vcont->id) -= idk;
 					D(source_count, source_count) = 1;
 					J(source_count, 0) = GiNaC::symbol("I_" + idk.get_name());
 					source_count++;

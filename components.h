@@ -2,10 +2,11 @@
 #define LOGICCOMP_H_
 
 #include <stdint.h>
+//#include <vector>
 
 typedef struct{
 	void* texID;
-	double rotation;
+	float rot;
 	double dims[2];
 	double pos[2];
 } Quad_t;
@@ -44,6 +45,7 @@ typedef struct{
 
 typedef struct{
 	component_type type;
+	uint8_t num_pins;
 	const char* name;
 	const char* abriv;
 } component_def_t;
@@ -61,10 +63,19 @@ struct component_t{
 	pin_t cn, cp;
 	//TODO: make em component_t[]
 	// this becume important with current controlled sources
-	component_t* Vcontroll;
+	union{
+		// for F and H components
+		struct{
+			component_t* Vcont;
+			component_t* shouldntbeused;
+		};
+		// for coupled inductors
+		struct{
+			component_t* L1;
+			component_t* L2;
+		};
+	};
 	//these are relevent in the case of coupled inductors
-	component_t* L1;
-	component_t* L2;
 	// rendering stuff
 	Quad_t quad;
 };
@@ -73,22 +84,23 @@ typedef struct component_t component_t;
 
 typedef struct{
 	pin_t* pins[2];
+	//std::vector<double[2]> joints;
 } link_t;
 
 
 component_def_t components[] = {
-	{undefined,             "",                                  ""},
-	{resestor,              "resestor",                          "R"},
-	{inductor,              "inductor",                          "L"},
-	{capacitor,             "capacitor",                         "C"},
-	{coupled_inductors,     "coupled inductors",                 "K"},
-	{indp_voltage_source,   "voltage source",                    "V"},
-	{indp_current_source,   "current source",                    "I"},
-	{volt_cont_volt_source, "voltage controlled voltage source", "VCVS"},
-	{volt_cont_curr_source, "voltage controlled current source", "VCCS"},
-	{curr_cont_volt_source, "current controlled voltage source", "CCVS"},
-	{curr_cont_curr_source, "current controlled current source", "CCCS" /*soviet moment*/ },
-	{operational_amplifier, "operational amplifier",             "OpAmp"}
+	{undefined,             2, "",                                  ""},
+	{resestor,              2, "resestor",                          "R"},
+	{inductor,              2, "inductor",                          "L"},
+	{capacitor,             2, "capacitor",                         "C"},
+	{coupled_inductors,     4, "coupled inductors",                 "K"},
+	{indp_voltage_source,   4, "voltage source",                    "V"},
+	{indp_current_source,   4, "current source",                    "I"},
+	{volt_cont_volt_source, 4, "voltage controlled voltage source", "VCVS"},
+	{volt_cont_curr_source, 4, "voltage controlled current source", "VCCS"},
+	{curr_cont_volt_source, 4, "current controlled voltage source", "CCVS"},
+	{curr_cont_curr_source, 4, "current controlled current source", "CCCS" /*soviet moment*/ },
+	{operational_amplifier, 3, "operational amplifier",             "OpAmp"}
 };
 
 #endif //LOGICCOMMP_H_
