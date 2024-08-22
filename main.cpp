@@ -1,4 +1,3 @@
-#include <cstdint>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -9,6 +8,7 @@
 #include "libs/imgui/backends/imgui_impl_opengl3.h"
 #include "libs/glad/glad.h"
 #include <GLFW/glfw3.h>
+#include <string>
 #include <vector>
 #include "ed.h"
 
@@ -139,8 +139,13 @@ void showeditormenu(editor_t* p_editor){
 
 void show_comp_menu(editor_t* editor){
 	if(ImGui::BeginPopup("component menu")){
-		if(ImGui::MenuItem("driping")){
-		}
+		if(ImGui::MenuItem("rotate by  90 deg"))
+			for(auto comp : editor->selected_components)
+				comp->quad.rot += 1.570755; // PI/2
+		if(ImGui::MenuItem("rotate by -90 deg"))
+			for(auto comp : editor->selected_components)
+				comp->quad.rot -= 1.570755; // PI/2
+
 		if(editor->selected_components.size() == 1){
 			if(ImGui::MenuItem("properies")){
 				ImGui::Text("component settings");
@@ -148,6 +153,19 @@ void show_comp_menu(editor_t* editor){
 				"current", "gain", "gain", "gain", "gain", ""};
 				ImGui::InputDouble(name[editor->selected_components[0]->defenition.type], &editor->selected_components[0]->caracteristic);
 				editor->selected_components.clear();
+			}
+			if(editor->selected_components[0]->defenition.type == curr_cont_curr_source ||
+			   editor->selected_components[0]->defenition.type == curr_cont_volt_source){
+				if(ImGui::BeginMenu("contoller")){
+					for(uint64_t i = 0; i < editor->components.size(); i++){
+						if(editor->components[i].defenition.type == indp_current_source){
+							if(ImGui::MenuItem((std::string(editor->components[i].defenition.name) + " " + std::to_string(editor->components[i].id)).c_str())){
+								editor->selected_components[0]->Vcont = &editor->components[i];
+							}
+						}
+					}
+					ImGui::EndMenu();
+				}
 			}
 		}
 		ImGui::EndPopup();
@@ -165,8 +183,8 @@ void processInput(GLFWwindow* window, editor_t* editor){
 	glfwGetCursorPos(window, &x, &y);
 
 	if(glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT)){
-		// BUG: if 2 pins are located less than minimum, the last placed one is the one selected
 		for(uint64_t i = 0; i < editor->components.size(); i++){
+			bool mouseovernode = false;
 			for(uint64_t j = 0; j < editor->components[i].defenition.num_pins; j++){
 				double diffx = x - editor->components[i].pins[j].pos[0];
 				double diffy = y - editor->components[i].pins[j].pos[1];
@@ -174,10 +192,14 @@ void processInput(GLFWwindow* window, editor_t* editor){
 					editor->components[i].pins[j].selected = true;
 					editor->connector = &editor->components[i].pins[j];
 					pin_was_selected = true;
+					mouseovernode = true;
 				}
 			}
-			if(mouse_over_quad(editor, x, y, &editor->components[i].quad)){
+			// TODO :: you should grab it slowlly
+			if(mouse_over_quad(editor, x, y, &editor->components[i].quad) && (!mouseovernode && !editor->connector)){
 				// select component
+				editor->components[i].quad.pos[0] += x - lastmousepos[0],
+				editor->components[i].quad.pos[1] += y - lastmousepos[1];
 				break;
 			}
 		}
@@ -284,10 +306,6 @@ void draw_comps(ImDrawList* drawlist){
 		              editor.grid.offset[1] + ((q->pos[1] - (((q->dims[1] * cosr) + (q->dims[0] * sinr)) / 4.l)) * editor.grid.scale));
 
 		drawlist->AddImageQuad(q->texID, p[0], p[1], p[2], p[3]);
-		//drawlist->AddCircleFilled(p[0], 10, IM_COL32(0, 0, 0, 255));
-		//drawlist->AddCircleFilled(p[1], 10, IM_COL32(0, 0, 0, 255));
-		//drawlist->AddCircleFilled(p[2], 10, IM_COL32(0, 0, 0, 255));
-		//drawlist->AddCircleFilled(p[3], 10, IM_COL32(0, 0, 0, 255));
 
 		ImVec2 npos;
 		for(uint64_t j = 0; j < editor.components[i].defenition.num_pins; j++){
@@ -365,6 +383,9 @@ void Dockspace(){
 		for(auto compo : editor.selected_components){
 			ImGui::Text("%s %lu", compo->defenition.name, compo->id);
 			ImGui::SliderAngle("angle", &compo->quad.rot);
+			const char* name[] = {"", "resestance", "inductance", "capacitance", "k", "voltage",
+			"current", "gain", "gain", "gain", "gain", ""};
+			ImGui::InputDouble(name[compo->defenition.type], &compo->caracteristic);
 			ImGui::Separator();
 		}
 	}
