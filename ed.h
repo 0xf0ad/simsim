@@ -10,8 +10,8 @@
 #include <ostream>
 #include <stdint.h>
 #include <stdbool.h>
+#include <assert.h>
 #include "components.h"
-#include "matrix.h"
 
 #include "libs/stbi/stb_image.h"
 #include "libs/glad/glad.h"

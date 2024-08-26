@@ -11,7 +11,6 @@
 #include "libs/imgui/imgui_internal.h"
 #include "libs/glad/glad.h"
 #include <GLFW/glfw3.h>
-#include <string>
 #include <vector>
 #include "ed.h"
 
