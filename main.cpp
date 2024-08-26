@@ -1,11 +1,14 @@
+#include <cstdint>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <math.h>
+#include <string.h>
 #include "components.h"
 #include "libs/imgui/imgui.h"
 #include "libs/imgui/backends/imgui_impl_glfw.h"
 #include "libs/imgui/backends/imgui_impl_opengl3.h"
+#include "libs/imgui/imgui_internal.h"
 #include "libs/glad/glad.h"
 #include <GLFW/glfw3.h>
 #include <string>
@@ -113,7 +116,6 @@ void spawn_comp(editor_t* p_editor, double posx, double posy, component_type com
 
 }
 
-
 void recenter_grid(editor_t* p_editor){
 	p_editor->grid.offset[0] = p_editor->resol[0] / 2.l;
 	p_editor->grid.offset[1] = p_editor->resol[1] / 2.l;
@@ -122,7 +124,7 @@ void recenter_grid(editor_t* p_editor){
 void showeditormenu(editor_t* p_editor){
 	if(ImGui::BeginPopup("editor menu")){
 		ImVec2 mousepos = ImGui::GetMousePosOnOpeningCurrentPopup();
-		if(ImGui::BeginMenu("add a logic gate")){
+		if(ImGui::BeginMenu("add a component")){
 			for(uint32_t i = 1; i < sizeof(components)/sizeof(components[0]); i++)
 				if(ImGui::MenuItem(components[i].name))
 					spawn_comp(p_editor,
@@ -130,7 +132,7 @@ void showeditormenu(editor_t* p_editor){
 					          (mousepos.y - editor.grid.offset[1]) / editor.grid.scale,
 					          components[i].type);
 			ImGui::EndMenu();
-	}
+		}
 		if(ImGui::MenuItem("re-center the grid"))
 			recenter_grid(p_editor);
 		ImGui::EndPopup();
@@ -138,6 +140,7 @@ void showeditormenu(editor_t* p_editor){
 }
 
 void show_comp_menu(editor_t* editor){
+	static ImGuiID popupID = 0;
 	if(ImGui::BeginPopup("component menu")){
 		if(ImGui::MenuItem("rotate by  90 deg"))
 			for(auto comp : editor->selected_components)
@@ -148,27 +151,49 @@ void show_comp_menu(editor_t* editor){
 
 		if(editor->selected_components.size() == 1){
 			if(ImGui::MenuItem("properies")){
-				ImGui::Text("component settings");
-				const char* name[] = {"", "resestance", "inductance", "capacitance", "k", "voltage",
-				"current", "gain", "gain", "gain", "gain", ""};
-				ImGui::InputDouble(name[editor->selected_components[0]->defenition.type], &editor->selected_components[0]->caracteristic);
-				editor->selected_components.clear();
-			}
-			if(editor->selected_components[0]->defenition.type == curr_cont_curr_source ||
-			   editor->selected_components[0]->defenition.type == curr_cont_volt_source){
-				if(ImGui::BeginMenu("contoller")){
-					for(uint64_t i = 0; i < editor->components.size(); i++){
-						if(editor->components[i].defenition.type == indp_current_source){
-							if(ImGui::MenuItem((std::string(editor->components[i].defenition.name) + " " + std::to_string(editor->components[i].id)).c_str())){
-								editor->selected_components[0]->Vcont = &editor->components[i];
-							}
-						}
-					}
-					ImGui::EndMenu();
-				}
+				// a work around cuz I cant open a popup from a menu
+				popupID = ImHashStr("comp properties");
+				ImGui::PushOverrideID(popupID);
+				ImGui::OpenPopup("comp properties");
+				ImGui::PopID();
 			}
 		}
 		ImGui::EndPopup();
+	}
+
+	if(popupID){
+		ImGui::PushOverrideID(popupID);
+		if(ImGui::BeginPopupModal("comp properties")){
+			ImGui::Text("component settings");
+			const char* value_name[] = {"", "resestance", "inductance", "capacitance", "k", "voltage",
+			"current", "gain", "gain", "gain", "gain", ""};
+			ImGui::InputDouble(value_name[editor->selected_components[0]->defenition.type], &editor->selected_components[0]->caracteristic);
+			if(editor->selected_components[0]->defenition.type == curr_cont_curr_source ||
+			   editor->selected_components[0]->defenition.type == curr_cont_volt_source){
+				static const char* currently_selected = NULL;
+				if(ImGui::BeginCombo("contoller", currently_selected)){
+					for(uint64_t i = 0; i < editor->components.size(); i++){
+						if(editor->components[i].defenition.type == indp_current_source){
+							char name[32];
+							snprintf(name, 31, "%s %ld", editor->components[i].defenition.name, editor->components[i].id);
+							bool is_selected = currently_selected ? (!strcmp(currently_selected, name)) : false;
+							if(ImGui::Selectable(name, is_selected)){
+								editor->selected_components[0]->Vcont = &editor->components[i];
+								if(currently_selected) free((void*) currently_selected);
+								currently_selected = strdup(name);
+							}
+							if(is_selected) ImGui::SetItemDefaultFocus();
+						}
+					}
+					ImGui::EndCombo();
+				}
+			} else if(editor->selected_components[0]->defenition.type == coupled_inductors){
+				ImGui::InputDouble("inductance 1", &editor->selected_components[0]->L1->caracteristic);
+				ImGui::InputDouble("inductance 2", &editor->selected_components[0]->L2->caracteristic);
+			}
+			ImGui::EndPopup();
+		}
+		ImGui::PopID();
 	}
 }
 
@@ -244,6 +269,7 @@ void processInput(GLFWwindow* window, editor_t* editor){
 };
 
 void Menu(){
+	static ImGuiID popupID = 0;
 	if (ImGui::BeginMenuBar()){
 		if (ImGui::BeginMenu("File")){
 			if (ImGui::MenuItem("New", nullptr, false, true)){}
@@ -263,10 +289,24 @@ void Menu(){
 		}
 
 		if (ImGui::BeginMenu("Help")){
-			if (ImGui::MenuItem("About", nullptr, false, true)){}
+			if (ImGui::MenuItem("About", nullptr, false, true)){
+				popupID = ImHashStr("about window");
+				ImGui::PushOverrideID(popupID);
+				ImGui::OpenPopup( "about window" );
+				ImGui::PopID();
+			}
 			ImGui::EndMenu();
 		}
 		ImGui::EndMenuBar();
+	}
+	// work around not being able to init popup wondows from menu items
+	if(popupID){
+		ImGui::PushOverrideID(popupID);
+		if(ImGui::BeginPopupModal("about window")){
+			ImGui::Text("dont u know me");
+			ImGui::EndPopup();
+		}
+		ImGui::PopID();
 	}
 }
 
@@ -493,10 +533,7 @@ int main(void){
 		Dockspace();
 		process(&editor);
 
-		//ImGui::ShowMetricsWindow();
-
-
-		//ImGui::ShowDemoWindow();
+		ImGui::ShowDemoWindow();
 		processInput(window, &editor);
 		showeditormenu(&editor);
 		show_comp_menu(&editor);
