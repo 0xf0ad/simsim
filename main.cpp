@@ -1,3 +1,6 @@
+#include <cstdint>
+#include <ginac/constant.h>
+#include <ginac/ex.h>
 #include <ginac/matrix.h>
 #include <ginac/numeric.h>
 #include <stdio.h>
@@ -10,6 +13,7 @@
 #include "libs/imgui/backends/imgui_impl_glfw.h"
 #include "libs/imgui/backends/imgui_impl_opengl3.h"
 #include "libs/imgui/imgui_internal.h"
+#include "libs/implot/implot.h"
 #include "libs/glad/glad.h"
 #include <GLFW/glfw3.h>
 #include <vector>
@@ -271,6 +275,35 @@ void processInput(GLFWwindow* window, editor_t* editor){
 	lastmousepos[0] = x, lastmousepos[1] = y;
 };
 
+void bode_plot(editor_t* editor, uint64_t nodeID1, uint64_t nodeID2, uint64_t samples, double start, double end){
+	double x[samples], magni[samples], phase[samples];
+	start = log10(start); end = log10(end);
+	double delta = (end - start)/samples;
+	for(uint64_t count = 0; count < samples; count++){
+		double omega =  pow(10, (delta * count) + start);
+		GiNaC::ex transfer_func = H(editor, nodeID1, nodeID2, omega*GiNaC::I);
+		GiNaC::ex mag = GiNaC::evalf(20 * (GiNaC::log(GiNaC::abs(transfer_func)) / GiNaC::log(10)));
+		GiNaC::ex phi = GiNaC::evalf(GiNaC::atan(GiNaC::imag_part(transfer_func) / GiNaC::real_part(transfer_func)) * 180 / GiNaC::Pi);
+		x[count] = omega;
+		// C++ moment
+		//std::cout << omega << ", " <<mag <<", "<<phi<< "\n";
+		magni[count] = GiNaC::ex_to<GiNaC::numeric>(mag).to_double();
+		phase[count] = GiNaC::ex_to<GiNaC::numeric>(phi).to_double();
+	}
+	ImGui::Begin("bode plot");
+	if (ImPlot::BeginPlot("magnitue plot")){
+		ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
+		ImPlot::PlotLine("magnitude", x, magni, samples);
+		ImPlot::EndPlot();
+	}
+	if (ImPlot::BeginPlot("phase plot")){
+		ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
+		ImPlot::PlotLine("phase", x, phase, samples);
+		ImPlot::EndPlot();
+	}
+	ImGui::End();
+}
+
 void Menu(){
 	static ImGuiID aboutpopupID = 0;
 	if (ImGui::BeginMenuBar()){
@@ -285,21 +318,7 @@ void Menu(){
 			ImGui::EndMenu();
 		}
 		if(ImGui::BeginMenu("solve circuit")){
-			if(ImGui::MenuItem("solve for G matrix")){
-				for(auto comp : editor.components)	
-					if(comp.defenition.type == graph){
-						//GiNaC::symbol omega("w");
-						for(double i = 0.01; i < 10000; i *= 10)
-							for(double j = 1; j < 10; j++){
-								//std::cout << Hatch << "\n";
-								double omega = i * j;
-								GiNaC::ex res = H(&editor, comp.pins[0].connected_node->id, comp.pins[1].connected_node->id, omega*GiNaC::I);
-								GiNaC::ex mag = GiNaC::evalf(20 * (GiNaC::log(GiNaC::abs(res)) / GiNaC::log(10)));
-								std::cout << i * j << ", " << mag << "\n";
-							}
-					}
-				//std::cout << H(&editor, 2, 3) << "\n";
-			}
+			if(ImGui::MenuItem("solve for G matrix")){}
 			ImGui::EndMenu();
 		}
 
@@ -386,6 +405,13 @@ void draw_comps(ImDrawList* drawlist){
 				color = IM_COL32(0, 255, 0, 255);
 			}
 			drawlist->AddCircleFilled(npos, 7.5 * editor.grid.scale, color);
+		}
+
+		if(editor.components[i].defenition.type == graph){
+			if(editor.components[i].pins[0].connected_node &&
+			   editor.components[i].pins[1].connected_node)
+				bode_plot(&editor, editor.components[i].pins[0].connected_node->id,
+				 editor.components[i].pins[1].connected_node->id, 100, 0.01, 100);
 		}
 	}
 }
@@ -519,6 +545,7 @@ int main(void){
 
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
+	ImPlot::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
 	ImGui::StyleColorsLight();
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
@@ -563,6 +590,7 @@ int main(void){
 
 	ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
+	ImPlot::DestroyContext();
 	ImGui::DestroyContext();
 	glfwTerminate();
 	return EXIT_SUCCESS;

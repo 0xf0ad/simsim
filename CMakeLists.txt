@@ -31,13 +31,14 @@ find_package(OpenGL REQUIRED)
 add_subdirectory(libs/stbi)
 add_subdirectory(libs/glad)
 add_subdirectory(libs/imgui)
+add_subdirectory(libs/implot)
 
 # set "cppsource" variables to all .c and .cpp files in "src"
 file(GLOB_RECURSE cppsource CONFIGURE_DEPENDS "main.cpp")
 file(GLOB_RECURSE csource   CONFIGURE_DEPENDS "")
 
 add_executable(sim ${csource} ${cppsource})
-target_link_libraries(sim ${OPENGL_LIBRARIES} glad stb_image imgui ginac cln)
+target_link_libraries(sim ${OPENGL_LIBRARIES} glad stb_image imgui implot ginac cln)
 
 if(CMAKE_SYSTEM_NAME MATCHES "Windows")
 	target_link_libraries(sim -lm -lgdi32 -luser32 -lkernel32)
