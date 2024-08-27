@@ -1,4 +1,5 @@
-#include <cstdint>
+#include <ginac/matrix.h>
+#include <ginac/numeric.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -99,6 +100,9 @@ void spawn_comp(editor_t* p_editor, double posx, double posy, component_type com
 			.pos = {posx, posy}
 		},
 	};
+
+	if(comp_type == ground)
+		comp.pins[0].connected_node = p_editor->head;
 
 	if(comp_type == coupled_inductors){
 		comp.L1 = (component_t*) malloc(sizeof(component_t));
@@ -268,7 +272,7 @@ void processInput(GLFWwindow* window, editor_t* editor){
 };
 
 void Menu(){
-	static ImGuiID popupID = 0;
+	static ImGuiID aboutpopupID = 0;
 	if (ImGui::BeginMenuBar()){
 		if (ImGui::BeginMenu("File")){
 			if (ImGui::MenuItem("New", nullptr, false, true)){}
@@ -282,15 +286,27 @@ void Menu(){
 		}
 		if(ImGui::BeginMenu("solve circuit")){
 			if(ImGui::MenuItem("solve for G matrix")){
-				constract_matrices(&editor);
+				for(auto comp : editor.components)	
+					if(comp.defenition.type == graph){
+						//GiNaC::symbol omega("w");
+						for(double i = 0.01; i < 10000; i *= 10)
+							for(double j = 1; j < 10; j++){
+								//std::cout << Hatch << "\n";
+								double omega = i * j;
+								GiNaC::ex res = H(&editor, comp.pins[0].connected_node->id, comp.pins[1].connected_node->id, omega*GiNaC::I);
+								GiNaC::ex mag = GiNaC::evalf(20 * (GiNaC::log(GiNaC::abs(res)) / GiNaC::log(10)));
+								std::cout << i * j << ", " << mag << "\n";
+							}
+					}
+				//std::cout << H(&editor, 2, 3) << "\n";
 			}
 			ImGui::EndMenu();
 		}
 
 		if (ImGui::BeginMenu("Help")){
 			if (ImGui::MenuItem("About", nullptr, false, true)){
-				popupID = ImHashStr("about window");
-				ImGui::PushOverrideID(popupID);
+				aboutpopupID = ImHashStr("about window");
+				ImGui::PushOverrideID(aboutpopupID);
 				ImGui::OpenPopup( "about window" );
 				ImGui::PopID();
 			}
@@ -299,10 +315,12 @@ void Menu(){
 		ImGui::EndMenuBar();
 	}
 	// work around not being able to init popup wondows from menu items
-	if(popupID){
-		ImGui::PushOverrideID(popupID);
+	if(aboutpopupID){
+		ImGui::PushOverrideID(aboutpopupID);
 		if(ImGui::BeginPopupModal("about window")){
 			ImGui::Text("dont u know me");
+			ImGui::Text("shame on you");
+			if(ImGui::Button("OK"))	ImGui::CloseCurrentPopup();
 			ImGui::EndPopup();
 		}
 		ImGui::PopID();
@@ -350,7 +368,9 @@ void draw_comps(ImDrawList* drawlist){
 		for(uint64_t j = 0; j < editor.components[i].defenition.num_pins; j++){
 			uint8_t indices[] = {0, 1, 3, 2};
 			uint8_t a = indices[j%2], b = indices[(j%2) + 2];
-			if(editor.components[i].defenition.num_pins == 2)
+			if(editor.components[i].defenition.num_pins == 1)
+				npos = ImVec2((p[2].x + p[3].x) / 2, (p[2].y + p[3].y) / 2);
+			else if(editor.components[i].defenition.num_pins == 2)
 				npos = ImVec2((p[a].x + p[b].x) / 2, (p[a].y + p[b].y) / 2);
 			else if(editor.components[i].defenition.num_pins == 3)
 				if(j == 1)
@@ -418,25 +438,17 @@ void Dockspace(){
 	ImGui::End();
 
 	ImGui::Begin("Properties", nullptr, ImGuiWindowFlags_None);
-	if(editor.selected_components.size()){
-		for(auto compo : editor.selected_components){
-			ImGui::Text("%s %lu", compo->defenition.name, compo->id);
-			ImGui::SliderAngle("angle", &compo->quad.rot);
-			const char* name[] = {"", "resestance", "inductance", "capacitance", "k", "voltage",
-			"current", "gain", "gain", "gain", "gain", ""};
-			ImGui::InputDouble(name[compo->defenition.type], &compo->caracteristic);
-			ImGui::Separator();
-		}
-	}
+	//node_t* h = editor.head;
+	//while(h){
+	//	ImGui::Text("%i: %p -> %p -> %p", h->id, h->prev, h, h->next);
+	//	h = h->next;
+	//}
 	ImGui::End();
 
 	ImGui::Begin("Explorer", nullptr, ImGuiWindowFlags_None);
 	ImGui::Text("numnoded : %lu", get_num_nodes(&editor));
 	for(size_t i = 0; i < editor.components.size(); i++)
-		ImGui::Text("id: %s\tfrom: %lu to: %lu", editor.components[i].defenition.name, editor.components[i].pins[0].connected_node ? editor.components[i].pins[0].connected_node->id : -1, editor.components[i].pins[1].connected_node ? editor.components[i].pins[1].connected_node->id : -1);
-	ImGui::End();
-
-	ImGui::Begin("Properties", nullptr, ImGuiWindowFlags_None);
+		ImGui::Text("id: %s\tfrom: %lu to: %lu", editor.components[i].defenition.name, editor.components[i].pins[0].connected_node ? editor.components[i].pins[0].connected_node->id : 69, editor.components[i].pins[1].connected_node ? editor.components[i].pins[1].connected_node->id : 420);
 	ImGui::End();
 
 	ImGui::Begin("Diagram", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
@@ -478,6 +490,7 @@ int main(void){
 			.step = 64.l,
 			.offset = {0.l, 0.l},
 		},
+		// we consider the head as the ground point
 		.head = add_node(NULL),
 		.connector = NULL,
 		.components = std::vector<component_t>(),
@@ -530,9 +543,9 @@ int main(void){
 		ImGui::NewFrame();
 
 		Dockspace();
-		process(&editor);
+		//process(&editor);
 
-		ImGui::ShowDemoWindow();
+		//ImGui::ShowDemoWindow();
 		processInput(window, &editor);
 		showeditormenu(&editor);
 		show_comp_menu(&editor);

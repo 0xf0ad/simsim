@@ -14,6 +14,7 @@ typedef struct{
 enum component_type{
 	// TODO: expand
 	undefined,
+	ground,
 	resistor,
 	inductor,
 	capacitor,
@@ -25,6 +26,7 @@ enum component_type{
 	curr_cont_volt_source,
 	curr_cont_curr_source,
 	operational_amplifier,
+	graph
 };
 
 struct node_t{
@@ -90,18 +92,20 @@ typedef struct{
 
 
 component_def_t components[] = {
-	{undefined,             2, "",                                  ""},
+	{undefined,             0, "",                                  ""},
+	{ground,                1, "ground",                            "GND"},
 	{resistor,              2, "resistor",                          "R"},
 	{inductor,              2, "inductor",                          "L"},
 	{capacitor,             2, "capacitor",                         "C"},
 	{coupled_inductors,     4, "coupled inductors",                 "K"},
-	{indp_voltage_source,   2, "voltage source",                    "V"},
+	{indp_voltage_source,   2, "voltage source",                    "E"},
 	{indp_current_source,   2, "current source",                    "I"},
 	{volt_cont_volt_source, 4, "voltage controlled voltage source", "VCVS"},
 	{volt_cont_curr_source, 4, "voltage controlled current source", "VCCS"},
 	{curr_cont_volt_source, 2, "current controlled voltage source", "CCVS"},
 	{curr_cont_curr_source, 2, "current controlled current source", "CCCS" /*soviet moment*/ },
-	{operational_amplifier, 3, "operational amplifier",             "OpAmp"}
+	{operational_amplifier, 3, "operational amplifier",             "OpAmp"},
+	{graph,                 2, "graph",                             "graph"}
 };
 
 #endif //LOGICCOMMP_H_

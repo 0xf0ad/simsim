@@ -31,6 +31,7 @@ typedef struct{
 	uint64_t num_indp_vol_sources;
 	uint16_t resol[2];
 	grid_t grid;
+	// we consider the head as the ground point
 	node_t* head;
 	pin_t* connector;
 	std::vector<component_t> components;
@@ -114,14 +115,14 @@ inline node_t* add_node(node_t* head){
 	uint64_t id;
 
 	if(node){
-		id = node->id;
+		id = node->id + 1;
 
 		while(node->next)
 			id++, node = node->next;
 
 		node->next = (node_t*) malloc(sizeof(node_t));
+		node->next->prev = node;
 		node = node->next;
-		node->prev = node;
 	} else {
 		id = 0;
 		node = (node_t*) malloc(sizeof(node_t));
@@ -139,17 +140,16 @@ inline void update_ids(node_t* node){
 }
 
 inline void rm_node(editor_t* editor,node_t* node){
-	if(editor){
-		for(uint64_t i = 0; i < editor->components.size(); i++){
-			if(editor->components[i].pins[0].connected_node == node)
-				editor->components[i].pins[0].connected_node = NULL;
-			if(editor->components[i].pins[1].connected_node == node)
-				editor->components[i].pins[1].connected_node = NULL;
-		}
-	}
+	if(editor)
+		for(uint64_t i = 0; i < editor->components.size(); i++)
+			for(uint8_t j = 0; j < editor->components[i].defenition.num_pins; j++)
+				if(editor->components[i].pins[j].connected_node == node)
+					editor->components[i].pins[j].connected_node = NULL;
 
 	if(node->prev)
 		node->prev->next = node->next;
+	if(node->next)
+		node->next->prev = node->prev;
 
 	update_ids(node->prev);
 
@@ -160,34 +160,28 @@ inline void rm_node(editor_t* editor,node_t* node){
 inline node_t* merge_nodes(editor_t* editor, node_t* node0, node_t* node1){
 	if(node0 == node1)
 		return node0;
-
-	if(editor){
-		for(uint64_t i = 0; i < editor->components.size(); i++){
-			if(editor->components[i].pins[0].connected_node == node1)
-				editor->components[i].pins[0].connected_node = node0;
-			if(editor->components[i].pins[1].connected_node == node1)
-				editor->components[i].pins[0].connected_node = node0;
-		}
+	if(node1 == editor->head){
+		node1 = node0;
+		node0 = editor->head;
 	}
+
+	if(editor)
+		for(uint64_t i = 0; i < editor->components.size(); i++)
+			for(uint8_t j = 0; j < editor->components[i].defenition.num_pins; j++)
+				if(editor->components[i].pins[j].connected_node == node1)
+					editor->components[i].pins[j].connected_node = node0;
 
 	if(node1->prev)
 		node1->prev->next = node1->next;
 	if(node1->next)
 		node1->next->prev = node1->prev;
 
-	if(node1 == editor->head){
-		node_t* head = node0;
-		while(head->prev)
-			head = head->prev;
-		editor->head = head;
-	}
-
 	free(node1);
 	return node0;
 }
 
 inline uint64_t get_num_nodes(editor_t* p_editor){
-	uint64_t count = 0;
+	uint64_t count = 1; // by counting this one itself
 	node_t* node = p_editor->head;
 	while((node = node->next))
 		count++;
@@ -211,11 +205,15 @@ inline uint64_t get_num_indep_volt_src(editor_t* p_editor){
 	return count;
 }
 
-inline void constract_matrices(editor_t* p_editor){
+enum computationtype{
+	symbolic,
+	numerical
+};
+
+inline void constract_matrices(editor_t* p_editor, GiNaC::matrix* pA, GiNaC::matrix* px, GiNaC::matrix* pZ, GiNaC::symbol s, computationtype ct){
 	uint64_t n = get_num_nodes(p_editor);
 	uint64_t m = get_num_indep_volt_src(p_editor);
 	uint64_t source_count = 0;
-	static GiNaC::symbol s("s");
 	// components of A matrix
 	GiNaC::matrix G(n, n), B(n, m), C(m, n), D(m, m);
 	// vectors of unknowns
@@ -233,18 +231,20 @@ inline void constract_matrices(editor_t* p_editor){
 				}
 				case resistor:{
 					GiNaC::symbol R(std::string(comp->defenition.abriv) + "_" + std::to_string(comp->id));
-					G(i, i) += 1/R;
-					G(i, j) -= 1/R;
-					G(j, i) -= 1/R;
-					G(j, j) += 1/R;
+					double numR = comp->caracteristic;
+					G(i, i) += (ct == symbolic) ? 1/R : 1/numR;
+					G(i, j) -= (ct == symbolic) ? 1/R : 1/numR;
+					G(j, i) -= (ct == symbolic) ? 1/R : 1/numR;
+					G(j, j) += (ct == symbolic) ? 1/R : 1/numR;
 					break;
 				}
 				case capacitor:{
 					GiNaC::symbol Cap(std::string(comp->defenition.abriv) + "_" + std::to_string(comp->id));
-					G(i, i) += s * Cap;
-					G(i, j) -= s * Cap;
-					G(j, i) -= s * Cap;
-					G(j, j) += s * Cap;
+					double numC = comp->caracteristic;
+					G(i, i) += (ct == symbolic) ? s * Cap : s * numC;
+					G(i, j) -= (ct == symbolic) ? s * Cap : s * numC;
+					G(j, i) -= (ct == symbolic) ? s * Cap : s * numC;
+					G(j, j) += (ct == symbolic) ? s * Cap : s * numC;
 					break;
 				}
 				case inductor:{
@@ -253,7 +253,7 @@ inline void constract_matrices(editor_t* p_editor){
 					B(j, source_count) = -1;
 					C(source_count, i) =  1;
 					C(source_count, j) = -1;
-					D(source_count, source_count) -= s * L;
+					D(source_count, source_count) -= ct == symbolic ? s * L : s * comp->caracteristic;
 					J(source_count, 0) += GiNaC::symbol("I_" + L.get_name());
 					source_count++;
 					break;
@@ -262,8 +262,9 @@ inline void constract_matrices(editor_t* p_editor){
 					uint64_t li = comp->L1->id;
 					uint64_t lj = comp->L2->id;
 					GiNaC::symbol M(std::string(comp->defenition.abriv) + "_" + std::to_string(comp->id));
-					D(li, lj) -= s * M;
-					D(lj, li) -= s * M;
+					double numM = comp->caracteristic * sqrt(comp->L1->caracteristic * comp->L2->caracteristic);
+					D(li, lj) -= (ct == symbolic) ? s * M : s * numM;
+					D(lj, li) -= (ct == symbolic) ? s * M : s * numM;
 					break;
 				}
 				case indp_voltage_source:{
@@ -273,26 +274,28 @@ inline void constract_matrices(editor_t* p_editor){
 					C(source_count, i) = -1;
 					C(source_count, j) =  1;
 					J(source_count, 0) += GiNaC::symbol("I_" + E.get_name());
-					Ev(source_count, 0) = E;
+					Ev(source_count, 0) = (ct == symbolic) ? E : (GiNaC::ex)comp->caracteristic;
 					source_count++;
 					break;
 				}
 				case indp_current_source:{
 					GiNaC::symbol Intens(std::string(comp->defenition.abriv) + "_" + std::to_string(comp->id));
-					I(i, 0) -= Intens;
-					I(j, 0) += Intens;
+					double numI = comp->caracteristic;
+					I(i, 0) -= ct == symbolic ? Intens : (GiNaC::ex)numI;
+					I(j, 0) += ct == symbolic ? Intens : (GiNaC::ex)numI;
 					break;
 				}
 				case volt_cont_volt_source:{
 					uint64_t ci = comp->pins[2].connected_node->id;
 					uint64_t cj = comp->pins[3].connected_node->id;
 					GiNaC::symbol element(std::string(comp->defenition.abriv) + "_" + std::to_string(comp->id));
+					double numelement = comp->caracteristic;
 					B(i, source_count) =  1;
 					B(j, source_count) = -1;
 					C(source_count, i) =  1;
 					C(source_count, j) = -1;
-					C(source_count, ci) = -element;
-					C(source_count, cj) =  element;
+					C(source_count, ci) = ct == symbolic ? -element : (GiNaC::ex)-numelement;
+					C(source_count, cj) = ct == symbolic ?  element : (GiNaC::ex) numelement;
 					J(source_count, 0) = GiNaC::symbol("I_" + element.get_name());
 					source_count++;
 					break;
@@ -301,10 +304,11 @@ inline void constract_matrices(editor_t* p_editor){
 					uint64_t ci = comp->pins[2].connected_node->id;
 					uint64_t cj = comp->pins[3].connected_node->id;
 					GiNaC::symbol idk(std::string(comp->defenition.abriv) + "_" + std::to_string(comp->id));
-					G(i, ci) += idk;
-					G(i, cj) -= idk;
-					G(j, ci) -= idk;
-					G(j, cj) += idk;
+					double numidk = comp->caracteristic;
+					G(i, ci) += ct == symbolic ? idk : (GiNaC::ex)numidk;
+					G(i, cj) -= ct == symbolic ? idk : (GiNaC::ex)numidk;
+					G(j, ci) -= ct == symbolic ? idk : (GiNaC::ex)numidk;
+					G(j, cj) += ct == symbolic ? idk : (GiNaC::ex)numidk;
 					break;
 				}
 				case curr_cont_volt_source:{
@@ -313,7 +317,7 @@ inline void constract_matrices(editor_t* p_editor){
 					B(j, source_count) = -1;
 					C(source_count, i) =  1;
 					C(source_count, j) = -1;
-					D(source_count, comp->Vcont->id) -= idk;
+					D(source_count, comp->Vcont->id) -= (ct == symbolic) ? idk : (GiNaC::ex)comp->caracteristic;
 					J(source_count, 0) = GiNaC::symbol("I_" + idk.get_name());
 					source_count++;
 					break;
@@ -322,7 +326,7 @@ inline void constract_matrices(editor_t* p_editor){
 					GiNaC::symbol idk(std::string(comp->defenition.abriv) + "_" + std::to_string(comp->id));
 					B(i, source_count) =  1;
 					B(j, source_count) = -1;
-					D(source_count, comp->Vcont->id) -= idk;
+					D(source_count, comp->Vcont->id) -= ct == symbolic ? idk : (GiNaC::ex)comp->caracteristic;
 					D(source_count, source_count) = 1;
 					J(source_count, 0) = GiNaC::symbol("I_" + idk.get_name());
 					source_count++;
@@ -339,9 +343,13 @@ inline void constract_matrices(editor_t* p_editor){
 					source_count++;
 					break;
 				}
+				case ground:
+				case graph:
+					break;
 			}
 		}
 	}
+
 	for(uint64_t i = 0; i < n; i++)
 		V(i, 0) = GiNaC::symbol("V_" + std::to_string(i));
 
@@ -349,52 +357,58 @@ inline void constract_matrices(editor_t* p_editor){
 	// I cant find better way to concatinate matrices
 	// A = [G B] 
 	//     [C D]
-	GiNaC::matrix A(n+m, n+m);
-	for(uint64_t i = 0; i < n+m; i++)
-		for(uint64_t j = 0; j < n+m; j++)
+	// start from i = 1 because 0 is the ground node
+	GiNaC::matrix A(n+m-1, n+m-1);
+	for(uint64_t i = 1; i < n+m; i++)
+		for(uint64_t j = 1; j < n+m; j++)
 			if(i < n && j < n)
-				A(i, j) = G(i, j);
+				A(i-1, j-1) = G(i, j);
 			else if(i < n && j >= n)
-				A(i, j) = B(i, j - n);
+				A(i-1, j-1) = B(i, j - n);
 			else if(i >= n && j < n)
-				A(i, j) = C(i - n, j);
+				A(i-1, j-1) = C(i - n, j);
 			else if(i >= n && j >= n)
-				A(i, j) = D(i - n, j - n);
+				A(i-1, j-1) = D(i - n, j - n);
 
 
-	GiNaC::matrix x(n+m, 1);
-	for(uint64_t i = 0; i < n+m; i++)
+	GiNaC::matrix x(n+m-1, 1);
+	for(uint64_t i = 1; i < n+m; i++)
 		if(i < n)
-			x(i, 0) = V(i, 0);
+			x(i-1, 0) = V(i, 0);
 		else
-			x(i, 0) = J(i - n, 0);
+			x(i-1, 0) = J(i - n, 0);
 
 
-	GiNaC::matrix Z(n+m, 1);
-	for(uint64_t i = 0; i < n+m; i++)
+	GiNaC::matrix Z(n+m-1, 1);
+	for(uint64_t i = 1; i < n+m; i++)
 		if(i < n)
-			Z(i, 0) = I(i, 0);
+			Z(i-1, 0) = I(i, 0);
 		else
-			Z(i, 0) = Ev(i - n, 0);
+			Z(i-1, 0) = Ev(i - n, 0);
 
+	*pA = A;
+	*px = x;
+	*pZ = Z;
+}
 
+// H(jw)(1, 2) = V2(jw) / V1(jw)
+inline GiNaC::ex H(editor_t* p_editor, uint64_t node1, uint64_t node2, GiNaC::ex jw){
 
+	GiNaC::symbol s("s");
+	GiNaC::matrix A, x, Z;
 
-	std::cout << A << "\n";
-	std::cout << x << "\n";
-	std::cout << Z << "\n";
+	constract_matrices(p_editor, &A, &x, &Z, s, numerical);
+
+	//std::cout << A << "\n";
+	//std::cout << x << "\n";
+	//std::cout << Z << "\n";
 
 	GiNaC::ex result = A.solve(x, Z);
 
-	std::cout << result << "\n";
 
-}
+	//std::cout << result << "\n";
+	return (result[node1] / result[node2]).subs(s == jw);
 
-inline void process(editor_t* p_editor){
-
-	//constract_matrices(p_editor);
-	//matrix_t B = constract_B_matrix();
-	//free_mat(&G);
 }
 
 
