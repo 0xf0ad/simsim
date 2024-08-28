@@ -273,6 +273,34 @@ void processInput(GLFWwindow* window, editor_t* editor){
 		fuckoff: ;
 	}
 	lastmousepos[0] = x, lastmousepos[1] = y;
+	
+	// keyboard input
+	// do you want to spawn two things at the same frame ? nah uh
+	static component_type wouldbespawn = undefined;
+	if(glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS)
+		wouldbespawn = resistor;
+	else if(glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS)
+		wouldbespawn = capacitor;
+	else if(glfwGetKey(window, GLFW_KEY_L) == GLFW_PRESS)
+		wouldbespawn = inductor;
+	else if(glfwGetKey(window, GLFW_KEY_V) == GLFW_PRESS)
+		wouldbespawn = indp_voltage_source;
+	else if(glfwGetKey(window, GLFW_KEY_I) == GLFW_PRESS)
+		wouldbespawn = indp_current_source;
+	else if(glfwGetKey(window, GLFW_KEY_G) == GLFW_PRESS)
+		wouldbespawn = ground;
+	else if(glfwGetKey(window, GLFW_KEY_T) == GLFW_PRESS)
+		wouldbespawn = coupled_inductors;
+	else if(glfwGetKey(window, GLFW_KEY_O) == GLFW_PRESS)
+		wouldbespawn = operational_amplifier;
+	else{
+		// if none of the above is pressed, spawn the last presed comp
+		if(wouldbespawn != undefined){
+			spawn_comp(editor, (x - editor->grid.offset[0]) / editor->grid.scale,
+			           (y - editor->grid.offset[1]) / editor->grid.scale, wouldbespawn);
+			wouldbespawn = undefined;
+		}
+	}
 };
 
 void bode_plot(editor_t* editor, uint64_t nodeID1, uint64_t nodeID2, uint64_t samples, double start, double end){
