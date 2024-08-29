@@ -146,6 +146,57 @@ void showeditormenu(editor_t* p_editor){
 	}
 }
 
+void show_bode_diag(double* p_x, double* p_magnitude, double* p_phase_shift, uint64_t samples){
+	static double* x = NULL, *magnitude = NULL, *phase_shift = NULL; 
+	if(p_x){
+		if(x)	free(x);
+		x = p_x;
+	} if(p_magnitude){
+		if(magnitude)	free(magnitude);
+		magnitude = p_magnitude;
+	} if(p_phase_shift){
+		if(phase_shift)	free(phase_shift);
+		phase_shift = p_phase_shift;
+	}
+
+	if(x && magnitude && phase_shift){
+		ImGui::Begin("bode plot");
+		if (ImPlot::BeginPlot("magnitue plot")){
+			ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
+			ImPlot::PlotLine("magnitude", x, magnitude, samples);
+			ImPlot::EndPlot();
+		}
+		if (ImPlot::BeginPlot("phase plot")){
+			ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
+			ImPlot::PlotLine("phase", x, phase_shift, samples);
+			ImPlot::EndPlot();
+		}
+		ImGui::End();
+	}
+}
+
+void bode_plot(editor_t* editor, uint64_t nodeID1, uint64_t nodeID2, uint64_t samples, double start, double end){
+	double* x = (double*) malloc(sizeof(double) * samples);
+	double* magni = (double*) malloc(sizeof(double) * samples);
+	double* phase = (double*) malloc(sizeof(double) * samples);
+	static bool showup = false;
+	start = log10(start); end = log10(end);
+	double delta = (end - start)/samples;
+	for(uint64_t count = 0; count < samples; count++){
+		double omega =  pow(10, (delta * count) + start);
+		GiNaC::ex transfer_func = H(editor, nodeID1, nodeID2, omega*GiNaC::I);
+		GiNaC::ex mag = GiNaC::evalf(20 * (GiNaC::log(GiNaC::abs(transfer_func)) / GiNaC::log(10)));
+		GiNaC::ex phi = GiNaC::evalf(GiNaC::atan(GiNaC::imag_part(transfer_func) / GiNaC::real_part(transfer_func)) * 180 / GiNaC::Pi);
+		x[count] = omega;
+		// C++ moment
+		magni[count] = GiNaC::ex_to<GiNaC::numeric>(mag).to_double();
+		phase[count] = GiNaC::ex_to<GiNaC::numeric>(phi).to_double();
+	}
+	show_bode_diag(x, magni, phase, samples);
+}
+
+
+
 void show_comp_menu(editor_t* editor){
 	static ImGuiID popupID = 0;
 	if(ImGui::BeginPopup("component menu")){
@@ -157,12 +208,27 @@ void show_comp_menu(editor_t* editor){
 				comp->quad.rot -= 1.570755; // PI/2
 
 		if(editor->selected_components.size() == 1){
-			if(ImGui::MenuItem("properies")){
-				// a work around cuz I cant open a popup from a menu
-				popupID = ImHashStr("comp properties");
-				ImGui::PushOverrideID(popupID);
-				ImGui::OpenPopup("comp properties");
-				ImGui::PopID();
+			if(editor->selected_components[0]->defenition.type == graph){
+				if(ImGui::MenuItem("bode plot")){
+					if(editor->selected_components[0]->pins[0].connected_node &&
+					   editor->selected_components[0]->pins[1].connected_node){
+						bode_plot(editor, editor->selected_components[0]->pins[0].connected_node->id,
+						editor->selected_components[0]->pins[1].connected_node->id, 100, 0.01, 100);
+					} else {
+						popupID = ImHashStr("ERR both terminals shal be connected");
+						ImGui::PushOverrideID(popupID);
+						ImGui::OpenPopup("ERR both terminals shal be connected");
+						ImGui::PopID();
+					}
+				}
+			} else {
+				if(ImGui::MenuItem("properies")){
+					// a work around cuz I cant open a popup from a menu
+					popupID = ImHashStr("comp properties");
+					ImGui::PushOverrideID(popupID);
+					ImGui::OpenPopup("comp properties");
+					ImGui::PopID();
+				}
 			}
 		}
 		ImGui::EndPopup();
@@ -198,6 +264,12 @@ void show_comp_menu(editor_t* editor){
 				ImGui::InputDouble("inductance 1", &editor->selected_components[0]->L1->caracteristic);
 				ImGui::InputDouble("inductance 2", &editor->selected_components[0]->L2->caracteristic);
 			}
+			ImGui::EndPopup();
+		}
+		if(ImGui::BeginPopupModal("ERR both terminals shal be connected")){
+			ImGui::Text("behold, both terminals shal be connected");
+			if(ImGui::Button("OK DOKIE"))
+				ImGui::CloseCurrentPopup();
 			ImGui::EndPopup();
 		}
 		ImGui::PopID();
@@ -303,34 +375,6 @@ void processInput(GLFWwindow* window, editor_t* editor){
 	}
 };
 
-void bode_plot(editor_t* editor, uint64_t nodeID1, uint64_t nodeID2, uint64_t samples, double start, double end){
-	double x[samples], magni[samples], phase[samples];
-	start = log10(start); end = log10(end);
-	double delta = (end - start)/samples;
-	for(uint64_t count = 0; count < samples; count++){
-		double omega =  pow(10, (delta * count) + start);
-		GiNaC::ex transfer_func = H(editor, nodeID1, nodeID2, omega*GiNaC::I);
-		GiNaC::ex mag = GiNaC::evalf(20 * (GiNaC::log(GiNaC::abs(transfer_func)) / GiNaC::log(10)));
-		GiNaC::ex phi = GiNaC::evalf(GiNaC::atan(GiNaC::imag_part(transfer_func) / GiNaC::real_part(transfer_func)) * 180 / GiNaC::Pi);
-		x[count] = omega;
-		// C++ moment
-		//std::cout << omega << ", " <<mag <<", "<<phi<< "\n";
-		magni[count] = GiNaC::ex_to<GiNaC::numeric>(mag).to_double();
-		phase[count] = GiNaC::ex_to<GiNaC::numeric>(phi).to_double();
-	}
-	ImGui::Begin("bode plot");
-	if (ImPlot::BeginPlot("magnitue plot")){
-		ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
-		ImPlot::PlotLine("magnitude", x, magni, samples);
-		ImPlot::EndPlot();
-	}
-	if (ImPlot::BeginPlot("phase plot")){
-		ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
-		ImPlot::PlotLine("phase", x, phase, samples);
-		ImPlot::EndPlot();
-	}
-	ImGui::End();
-}
 
 void Menu(){
 	static ImGuiID aboutpopupID = 0;
@@ -433,13 +477,6 @@ void draw_comps(ImDrawList* drawlist){
 				color = IM_COL32(0, 255, 0, 255);
 			}
 			drawlist->AddCircleFilled(npos, 7.5 * editor.grid.scale, color);
-		}
-
-		if(editor.components[i].defenition.type == graph){
-			if(editor.components[i].pins[0].connected_node &&
-			   editor.components[i].pins[1].connected_node)
-				bode_plot(&editor, editor.components[i].pins[0].connected_node->id,
-				 editor.components[i].pins[1].connected_node->id, 100, 0.01, 100);
 		}
 	}
 }
@@ -604,6 +641,7 @@ int main(void){
 		processInput(window, &editor);
 		showeditormenu(&editor);
 		show_comp_menu(&editor);
+		show_bode_diag(NULL, NULL, NULL, 69);
 
 
 		ImGui::Render();
