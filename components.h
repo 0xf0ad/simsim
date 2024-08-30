@@ -54,7 +54,7 @@ typedef struct{
 
 struct component_t{
 	uint64_t id;
-	component_def_t defenition;
+	component_def_t definition;
 	// this could be the resistance for R, the capacitance for C,
 	// the inductance for L, gain for sources
 	double caracteristic;
@@ -63,7 +63,7 @@ struct component_t{
 	//pin_t n, p;
 	// these are reserved to dependent votage and curren sources
 	//pin_t cn, cp;
-	pin_t pins[4];
+	pin_t *pins;
 	//TODO: make em component_t[]
 	// this becume important with current controlled sources
 	union{

@@ -1,4 +1,3 @@
-#include <cstdint>
 #include <ginac/constant.h>
 #include <ginac/ex.h>
 #include <ginac/matrix.h>
@@ -89,12 +88,9 @@ void spawn_comp(editor_t* p_editor, double posx, double posy, component_type com
 
 	component_t comp = {
 		.id = get_num_elements(p_editor, comp_type),
-		.defenition = components[comp_type],
+		.definition = components[comp_type],
 		.caracteristic = 1.l,
-		.pins  = {{.pos = {0, 0}, .connected_node = NULL, .selected = false},
-		          {.pos = {0, 0}, .connected_node = NULL, .selected = false},
-		          {.pos = {0, 0}, .connected_node = NULL, .selected = false},
-		          {.pos = {0, 0}, .connected_node = NULL, .selected = false}},
+		.pins = (pin_t*) malloc(sizeof(pin_t) * components[comp_type].num_pins),
 		.L1 = NULL,
 		.L2 = NULL,
 		.quad = {
@@ -105,6 +101,12 @@ void spawn_comp(editor_t* p_editor, double posx, double posy, component_type com
 		},
 	};
 
+	for(uint8_t i = 0; i < components[comp_type].num_pins; i++){
+		comp.pins[i].pos[0] = comp.pins[i].pos[1] = 0;
+		comp.pins[i].connected_node = NULL;
+		comp.pins[i].selected = false;
+	}
+
 	if(comp_type == ground)
 		comp.pins[0].connected_node = p_editor->head;
 
@@ -113,14 +115,13 @@ void spawn_comp(editor_t* p_editor, double posx, double posy, component_type com
 		comp.L2 = (component_t*) malloc(sizeof(component_t));
 		comp.L1->id = get_num_elements(p_editor, inductor);
 		comp.L2->id = get_num_elements(p_editor, inductor);
-		comp.L1->defenition = components[inductor];
-		comp.L2->defenition = components[inductor];
+		comp.L1->definition = components[inductor];
+		comp.L2->definition = components[inductor];
 		comp.L1->caracteristic = 1.l;
 		comp.L2->caracteristic = 1.l;
 	}
 
 	p_editor->components.push_back(comp);
-
 }
 
 void recenter_grid(editor_t* p_editor){
@@ -146,8 +147,9 @@ void showeditormenu(editor_t* p_editor){
 	}
 }
 
-void show_bode_diag(double* p_x, double* p_magnitude, double* p_phase_shift, uint64_t samples){
+void show_bode_diag(double* p_x, double* p_magnitude, double* p_phase_shift, uint64_t p_samples){
 	static double* x = NULL, *magnitude = NULL, *phase_shift = NULL; 
+	static uint64_t samples = 0;
 	if(p_x){
 		if(x)	free(x);
 		x = p_x;
@@ -157,18 +159,20 @@ void show_bode_diag(double* p_x, double* p_magnitude, double* p_phase_shift, uin
 	} if(p_phase_shift){
 		if(phase_shift)	free(phase_shift);
 		phase_shift = p_phase_shift;
+	} if(p_samples){
+		samples = p_samples;
 	}
 
-	if(x && magnitude && phase_shift){
+	if(x && magnitude && phase_shift && samples){
 		ImGui::Begin("bode plot");
 		if (ImPlot::BeginPlot("magnitue plot")){
 			ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
-			ImPlot::PlotLine("magnitude", x, magnitude, samples);
+			ImPlot::PlotLine("magnitude (dB)", x, magnitude, samples);
 			ImPlot::EndPlot();
 		}
 		if (ImPlot::BeginPlot("phase plot")){
 			ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
-			ImPlot::PlotLine("phase", x, phase_shift, samples);
+			ImPlot::PlotLine("phase (deg)", x, phase_shift, samples);
 			ImPlot::EndPlot();
 		}
 		ImGui::End();
@@ -179,14 +183,33 @@ void bode_plot(editor_t* editor, uint64_t nodeID1, uint64_t nodeID2, uint64_t sa
 	double* x = (double*) malloc(sizeof(double) * samples);
 	double* magni = (double*) malloc(sizeof(double) * samples);
 	double* phase = (double*) malloc(sizeof(double) * samples);
-	static bool showup = false;
 	start = log10(start); end = log10(end);
 	double delta = (end - start)/samples;
+
+	GiNaC::symbol s("s");
+	GiNaC::matrix A, X, Z;
+
+	constract_matrices(editor, &A, &X, &Z, s, numerical);
+
+	GiNaC::ex result = A.solve(X, Z);
+	GiNaC::ex H = result[nodeID1]/result[nodeID2];
+
 	for(uint64_t count = 0; count < samples; count++){
 		double omega =  pow(10, (delta * count) + start);
-		GiNaC::ex transfer_func = H(editor, nodeID1, nodeID2, omega*GiNaC::I);
-		GiNaC::ex mag = GiNaC::evalf(20 * (GiNaC::log(GiNaC::abs(transfer_func)) / GiNaC::log(10)));
-		GiNaC::ex phi = GiNaC::evalf(GiNaC::atan(GiNaC::imag_part(transfer_func) / GiNaC::real_part(transfer_func)) * 180 / GiNaC::Pi);
+		GiNaC::ex transfer_func = H.subs(s == omega*GiNaC::I);
+		GiNaC::ex phi, mag;
+		
+		if(transfer_func != 0)
+			mag = GiNaC::evalf(20 * (GiNaC::log(GiNaC::abs(transfer_func)) / GiNaC::log(10)));
+		else
+			// bach manti7och f log10(0) gha tandiro wa7d lvalue sghira bzf w3ma -infinity
+			mag = -1e40;
+
+		if(GiNaC::real_part(transfer_func) != 0)
+			phi = GiNaC::evalf(GiNaC::atan(GiNaC::imag_part(transfer_func) / GiNaC::real_part(transfer_func)) * 180 / GiNaC::Pi);
+		else
+			// a really big number z3ma infinity
+			phi = 1e40;
 		x[count] = omega;
 		// C++ moment
 		magni[count] = GiNaC::ex_to<GiNaC::numeric>(mag).to_double();
@@ -194,8 +217,6 @@ void bode_plot(editor_t* editor, uint64_t nodeID1, uint64_t nodeID2, uint64_t sa
 	}
 	show_bode_diag(x, magni, phase, samples);
 }
-
-
 
 void show_comp_menu(editor_t* editor){
 	static ImGuiID popupID = 0;
@@ -208,12 +229,12 @@ void show_comp_menu(editor_t* editor){
 				comp->quad.rot -= 1.570755; // PI/2
 
 		if(editor->selected_components.size() == 1){
-			if(editor->selected_components[0]->defenition.type == graph){
+			if(editor->selected_components[0]->definition.type == graph){
 				if(ImGui::MenuItem("bode plot")){
 					if(editor->selected_components[0]->pins[0].connected_node &&
 					   editor->selected_components[0]->pins[1].connected_node){
 						bode_plot(editor, editor->selected_components[0]->pins[0].connected_node->id,
-						editor->selected_components[0]->pins[1].connected_node->id, 100, 0.01, 100);
+						editor->selected_components[0]->pins[1].connected_node->id, 1000, 0.01, 100);
 					} else {
 						popupID = ImHashStr("ERR both terminals shal be connected");
 						ImGui::PushOverrideID(popupID);
@@ -240,15 +261,15 @@ void show_comp_menu(editor_t* editor){
 			ImGui::Text("component settings");
 			const char* value_name[] = {"", "resestance", "inductance", "capacitance", "k", "voltage",
 			"current", "gain", "gain", "gain", "gain", ""};
-			ImGui::InputDouble(value_name[editor->selected_components[0]->defenition.type], &editor->selected_components[0]->caracteristic);
-			if(editor->selected_components[0]->defenition.type == curr_cont_curr_source ||
-			   editor->selected_components[0]->defenition.type == curr_cont_volt_source){
+			ImGui::InputDouble(value_name[editor->selected_components[0]->definition.type], &editor->selected_components[0]->caracteristic);
+			if(editor->selected_components[0]->definition.type == curr_cont_curr_source ||
+			   editor->selected_components[0]->definition.type == curr_cont_volt_source){
 				static const char* currently_selected = NULL;
 				if(ImGui::BeginCombo("contoller", currently_selected)){
 					for(uint64_t i = 0; i < editor->components.size(); i++){
-						if(editor->components[i].defenition.type == indp_current_source){
+						if(editor->components[i].definition.type == indp_current_source){
 							char name[32];
-							snprintf(name, 31, "%s %ld", editor->components[i].defenition.name, editor->components[i].id);
+							snprintf(name, 31, "%s %ld", editor->components[i].definition.name, editor->components[i].id);
 							bool is_selected = currently_selected ? (!strcmp(currently_selected, name)) : false;
 							if(ImGui::Selectable(name, is_selected)){
 								editor->selected_components[0]->Vcont = &editor->components[i];
@@ -260,7 +281,7 @@ void show_comp_menu(editor_t* editor){
 					}
 					ImGui::EndCombo();
 				}
-			} else if(editor->selected_components[0]->defenition.type == coupled_inductors){
+			} else if(editor->selected_components[0]->definition.type == coupled_inductors){
 				ImGui::InputDouble("inductance 1", &editor->selected_components[0]->L1->caracteristic);
 				ImGui::InputDouble("inductance 2", &editor->selected_components[0]->L2->caracteristic);
 			}
@@ -289,7 +310,7 @@ void processInput(GLFWwindow* window, editor_t* editor){
 	if(glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT)){
 		for(uint64_t i = 0; i < editor->components.size(); i++){
 			bool mouseovernode = false;
-			for(uint64_t j = 0; j < editor->components[i].defenition.num_pins; j++){
+			for(uint64_t j = 0; j < editor->components[i].definition.num_pins; j++){
 				double diffx = x - editor->components[i].pins[j].pos[0];
 				double diffy = y - editor->components[i].pins[j].pos[1];
 				if((diffx*diffx + diffy*diffy) < minimum * minimum && !pin_was_selected){
@@ -310,7 +331,7 @@ void processInput(GLFWwindow* window, editor_t* editor){
 	}if(glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_RELEASE){
 		if(pin_was_selected){
 			for(uint64_t i = 0; i < editor->components.size(); i++){
-				for(uint64_t j = 0; j < editor->components[i].defenition.num_pins; j++){
+				for(uint64_t j = 0; j < editor->components[i].definition.num_pins; j++){
 					double diffx = x - editor->components[i].pins[j].pos[0];
 					double diffy = y - editor->components[i].pins[j].pos[1];
 					if((diffx*diffx + diffy*diffy) < minimum * minimum)
@@ -456,19 +477,19 @@ void draw_comps(ImDrawList* drawlist){
 		drawlist->AddImageQuad(q->texID, p[0], p[1], p[2], p[3]);
 
 		ImVec2 npos;
-		for(uint64_t j = 0; j < editor.components[i].defenition.num_pins; j++){
+		for(uint64_t j = 0; j < editor.components[i].definition.num_pins; j++){
 			uint8_t indices[] = {0, 1, 3, 2};
 			uint8_t a = indices[j%2], b = indices[(j%2) + 2];
-			if(editor.components[i].defenition.num_pins == 1)
+			if(editor.components[i].definition.num_pins == 1)
 				npos = ImVec2((p[2].x + p[3].x) / 2, (p[2].y + p[3].y) / 2);
-			else if(editor.components[i].defenition.num_pins == 2)
+			else if(editor.components[i].definition.num_pins == 2)
 				npos = ImVec2((p[a].x + p[b].x) / 2, (p[a].y + p[b].y) / 2);
-			else if(editor.components[i].defenition.num_pins == 3)
+			else if(editor.components[i].definition.num_pins == 3)
 				if(j == 1)
 					npos = ImVec2((p[a].x + p[b].x) / 2,(p[a].y + p[b].y) / 2);
 				else
 					npos = ImVec2((p[a].x + p[b].x) / 2, (((j >> 1) + 1) * (p[a].y - p[b].y) / 3) + p[b].y);
-			else if(editor.components[i].defenition.num_pins == 4)
+			else if(editor.components[i].definition.num_pins == 4)
 					npos = ImVec2((((j >> 1) + 1) * (p[a].x - p[b].x) / 3) + p[b].x,
 				                  (((j >> 1) + 1) * (p[a].y - p[b].y) / 3) + p[b].y);
 			editor.components[i].pins[j].pos[0] = npos.x, editor.components[i].pins[j].pos[1] = npos.y;
@@ -529,17 +550,19 @@ void Dockspace(){
 	ImGui::End();
 
 	ImGui::Begin("Properties", nullptr, ImGuiWindowFlags_None);
-	//node_t* h = editor.head;
-	//while(h){
-	//	ImGui::Text("%i: %p -> %p -> %p", h->id, h->prev, h, h->next);
-	//	h = h->next;
-	//}
 	ImGui::End();
 
 	ImGui::Begin("Explorer", nullptr, ImGuiWindowFlags_None);
 	ImGui::Text("numnoded : %lu", get_num_nodes(&editor));
-	for(size_t i = 0; i < editor.components.size(); i++)
-		ImGui::Text("id: %s\tfrom: %lu to: %lu", editor.components[i].defenition.name, editor.components[i].pins[0].connected_node ? editor.components[i].pins[0].connected_node->id : 69, editor.components[i].pins[1].connected_node ? editor.components[i].pins[1].connected_node->id : 420);
+	for(size_t i = 0; i < editor.components.size(); i++){
+		ImGui::Text("%s %lu, pins:", editor.components[i].definition.name, editor.components[i].id);
+		ImGui::SameLine();
+		for(uint8_t j = 0; j < editor.components[i].definition.num_pins; j++){
+			ImGui::Text("%lu", editor.components[i].pins[j].connected_node ? editor.components[i].pins[j].connected_node->id : 420);
+			ImGui::SameLine();
+		}
+		ImGui::NewLine();
+	}
 	ImGui::End();
 
 	ImGui::Begin("Diagram", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
@@ -641,7 +664,7 @@ int main(void){
 		processInput(window, &editor);
 		showeditormenu(&editor);
 		show_comp_menu(&editor);
-		show_bode_diag(NULL, NULL, NULL, 69);
+		show_bode_diag(NULL, NULL, NULL, 0);
 
 
 		ImGui::Render();
