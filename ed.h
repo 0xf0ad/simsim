@@ -13,8 +13,8 @@
 #include <assert.h>
 #include "components.h"
 
-#include "libs/stbi/stb_image.h"
-#include "libs/glad/glad.h"
+#include "stbi/stb_image.h"
+#include "glad/glad.h"
 
 #include <ginac/ginac.h>
 #include <string>

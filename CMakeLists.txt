@@ -26,16 +26,34 @@ project(gibmeaname)
 # OpenGL
 set(OpenGL_GL_PREFERENCE GLVND)
 find_package(OpenGL REQUIRED)
-#include_directories(src ${OPENGL_INCLUDE_DIRS})
 
-add_subdirectory(libs/stbi)
-add_subdirectory(libs/glad)
-add_subdirectory(libs/imgui)
-add_subdirectory(libs/implot)
+# imgui source files
+file(GLOB cppsource CONFIGURE_DEPENDS "imgui/*.cpp"
+                                      "imgui/backends/imgui_impl_glfw.cpp"
+                                      "imgui/backends/imgui_impl_opengl3.cpp")
+add_library(imgui ${cppsource})
+target_include_directories(imgui PUBLIC imgui/)
+unset(cppsource)
 
-# set "cppsource" variables to all .c and .cpp files in "src"
-file(GLOB_RECURSE cppsource CONFIGURE_DEPENDS "main.cpp")
-file(GLOB_RECURSE csource   CONFIGURE_DEPENDS "")
+# implot source files
+file(GLOB_RECURSE cppsource CONFIGURE_DEPENDS "implot/*.cpp")
+add_library(implot ${cppsource})
+target_link_libraries(implot imgui)
+target_include_directories(implot PUBLIC implot/)
+unset(cppsource)
+
+# glad source files
+file(GLOB csource   CONFIGURE_DEPENDS "glad/glad.c")
+add_library(glad ${csource})
+unset(csource)
+
+# stb_image source files
+file(GLOB csource   CONFIGURE_DEPENDS "stbi/stb_image.c")
+add_library(stb_image ${csource})
+unset(csource)
+
+# exe source files
+file(GLOB cppsource CONFIGURE_DEPENDS "*.cpp")
 
 add_executable(sim ${csource} ${cppsource})
 target_link_libraries(sim ${OPENGL_LIBRARIES} glad stb_image imgui implot ginac cln)

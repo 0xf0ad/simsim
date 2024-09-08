@@ -4,10 +4,10 @@
 #include <math.h>
 #include <string.h>
 #include "components.h"
-#include "libs/imgui/imgui.h"
-#include "libs/imgui/backends/imgui_impl_glfw.h"
-#include "libs/imgui/backends/imgui_impl_opengl3.h"
-#include "libs/glad/glad.h"
+#include "imgui/imgui.h"
+#include "imgui/backends/imgui_impl_glfw.h"
+#include "imgui/backends/imgui_impl_opengl3.h"
+#include "glad/glad.h"
 #include <GLFW/glfw3.h>
 #include <vector>
 #include "gui.h"

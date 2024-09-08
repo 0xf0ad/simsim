@@ -1,9 +1,9 @@
 #ifndef GUI_H_
 #define GUI_H_
 
-#include "libs/imgui/imgui.h"
-#include "libs/imgui/imgui_internal.h"
-#include "libs/implot/implot.h"
+#include "imgui/imgui.h"
+#include "imgui/imgui_internal.h"
+#include "implot/implot.h"
 #include "ed.h"
 #include <GLFW/glfw3.h>
 
