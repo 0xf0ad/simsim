@@ -164,13 +164,15 @@ inline void show_comp_menu(editor_t* editor){
 			if(editor->selected_components[0]->definition.type == graph){
 				if(ImGui::MenuItem("bode plot")){
 					if(editor->selected_components[0]->pins[0].connected_node &&
-					   editor->selected_components[0]->pins[1].connected_node){
-						bode_plot(editor, editor->selected_components[0]->pins[0].connected_node->id,
-						editor->selected_components[0]->pins[1].connected_node->id, 1000, 0.01, 100);
+					   editor->selected_components[0]->pins[1].connected_node ||
+					   (!editor->selected_components[0]->pins[0].connected_node->id) &&
+					   (!editor->selected_components[0]->pins[1].connected_node->id) ){
+						bode_plot(editor, editor->selected_components[0]->pins[0].connected_node->id - 1,
+						editor->selected_components[0]->pins[1].connected_node->id - 1, 1000, 0.01, 100);
 					} else {
 						popupID = ImHashStr("ERR both terminals shal be connected");
 						ImGui::PushOverrideID(popupID);
-						ImGui::OpenPopup("ERR both terminals shal be connected");
+						ImGui::OpenPopup("ERR both terminals shal be connected with non-ground nodes");
 						ImGui::PopID();
 					}
 				}
@@ -191,7 +193,7 @@ inline void show_comp_menu(editor_t* editor){
 		ImGui::PushOverrideID(popupID);
 		if(ImGui::BeginPopupModal("comp properties")){
 			ImGui::Text("component settings");
-			const char* value_name[] = {"", "resestance", "inductance", "capacitance", "k", "voltage",
+			const char* value_name[] = {"", "groundness","resestance", "inductance", "capacitance", "k", "voltage",
 			"current", "gain", "gain", "gain", "gain", ""};
 			ImGui::InputDouble(value_name[editor->selected_components[0]->definition.type], &editor->selected_components[0]->caracteristic);
 			if(editor->selected_components[0]->definition.type == curr_cont_curr_source ||
@@ -217,6 +219,8 @@ inline void show_comp_menu(editor_t* editor){
 				ImGui::InputDouble("inductance 1", &editor->selected_components[0]->L1->caracteristic);
 				ImGui::InputDouble("inductance 2", &editor->selected_components[0]->L2->caracteristic);
 			}
+			if(ImGui::Button("OK DOKIE"))
+				ImGui::CloseCurrentPopup();
 			ImGui::EndPopup();
 		}
 		if(ImGui::BeginPopupModal("ERR both terminals shal be connected")){

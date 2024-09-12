@@ -270,10 +270,10 @@ inline void constract_matrices(editor_t* p_editor, GiNaC::matrix* pA, GiNaC::mat
 				}
 				case indp_voltage_source:{
 					GiNaC::symbol E(std::string(comp->definition.abriv) + "_" + std::to_string(comp->id));
-					B(i, source_count) = -1;
-					B(j, source_count) =  1;
-					C(source_count, i) = -1;
-					C(source_count, j) =  1;
+					B(i, source_count) =  1;
+					B(j, source_count) = -1;
+					C(source_count, i) =  1;
+					C(source_count, j) = -1;
 					J(source_count, 0) += GiNaC::symbol("I_" + E.get_name());
 					Ev(source_count, 0) = (ct == symbolic) ? E : (GiNaC::ex)comp->caracteristic;
 					source_count++;
@@ -282,8 +282,8 @@ inline void constract_matrices(editor_t* p_editor, GiNaC::matrix* pA, GiNaC::mat
 				case indp_current_source:{
 					GiNaC::symbol Intens(std::string(comp->definition.abriv) + "_" + std::to_string(comp->id));
 					double numI = comp->caracteristic;
-					I(i, 0) -= ct == symbolic ? Intens : (GiNaC::ex)numI;
-					I(j, 0) += ct == symbolic ? Intens : (GiNaC::ex)numI;
+					I(i, 0) += ct == symbolic ? Intens : (GiNaC::ex)numI;
+					I(j, 0) -= ct == symbolic ? Intens : (GiNaC::ex)numI;
 					break;
 				}
 				case volt_cont_volt_source:{
@@ -345,6 +345,7 @@ inline void constract_matrices(editor_t* p_editor, GiNaC::matrix* pA, GiNaC::mat
 					break;
 				}
 				case graph:
+				case ground:
 					break;
 			}
 		}
