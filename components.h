@@ -57,7 +57,16 @@ struct component_t{
 	component_def_t definition;
 	// this could be the resistance for R, the capacitance for C,
 	// the inductance for L, gain for sources
-	double caracteristic;
+	union{
+		double caracteristic;
+		double resisteance;
+		double inductance;
+		double capacitance;
+		double mutual_inductance;
+		double voltage;
+		double current;
+		double gain;
+	};
 	// represent the node that are connected to anode and cathode
 	// TODO: make it a pin_t[]
 	//pin_t n, p;

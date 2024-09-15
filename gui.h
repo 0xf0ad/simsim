@@ -98,13 +98,17 @@ inline void show_bode_diag(double* p_x, double* p_magnitude, double* p_phase_shi
 	if(x && magnitude && phase_shift && samples){
 		ImGui::Begin("bode plot");
 		if (ImPlot::BeginPlot("magnitue plot")){
+
+			ImPlot::SetupAxis(ImAxis_X1, "frequency (rad/s)", ImPlotAxisFlags_None);
 			ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
+			ImPlot::SetupAxis(ImAxis_Y1, "magnitude (dB)", ImPlotAxisFlags_None);
+			ImPlot::SetupAxis(ImAxis_Y2, "phase (deg)", ImPlotAxisFlags_Opposite);
+
+			ImPlot::SetAxis(ImAxis_Y1);
 			ImPlot::PlotLine("magnitude (dB)", x, magnitude, samples);
-			ImPlot::EndPlot();
-		}
-		if (ImPlot::BeginPlot("phase plot")){
-			ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
+			ImPlot::SetAxis(ImAxis_Y2);
 			ImPlot::PlotLine("phase (deg)", x, phase_shift, samples);
+
 			ImPlot::EndPlot();
 		}
 		ImGui::End();
@@ -123,7 +127,7 @@ inline void bode_plot(editor_t* editor, uint64_t nodeID1, uint64_t nodeID2, uint
 
 	constract_matrices(editor, &A, &X, &Z, s, numerical);
 
-	GiNaC::ex result = A.solve(X, Z);
+	GiNaC::ex result = A.solve(X, Z, GiNaC::solve_algo::gauss);
 	GiNaC::ex H = result[nodeID1]/result[nodeID2];
 
 	for(uint64_t count = 0; count < samples; count++){
@@ -133,15 +137,19 @@ inline void bode_plot(editor_t* editor, uint64_t nodeID1, uint64_t nodeID2, uint
 		
 		if(transfer_func != 0)
 			mag = GiNaC::evalf(20 * (GiNaC::log(GiNaC::abs(transfer_func)) / GiNaC::log(10)));
-		else
-			// bach manti7och f log10(0) gha tandiro wa7d lvalue sghira bzf w3ma -infinity
-			mag = -1e40;
+		else{
+			// sf llah ishl 3liha
+			x[count] = omega;
+			magni[count] = -INFINITY;
+			phase[count] = 90;
+			continue;
+		}
 
 		if(GiNaC::real_part(transfer_func) != 0)
 			phi = GiNaC::evalf(GiNaC::atan(GiNaC::imag_part(transfer_func) / GiNaC::real_part(transfer_func)) * 180 / GiNaC::Pi);
 		else
-			// a really big number z3ma infinity
-			phi = 1e40;
+			// arctan(infinity) = pi/2
+			phi = 90;
 		x[count] = omega;
 		// C++ moment
 		magni[count] = GiNaC::ex_to<GiNaC::numeric>(mag).to_double();
@@ -163,10 +171,10 @@ inline void show_comp_menu(editor_t* editor){
 		if(editor->selected_components.size() == 1){
 			if(editor->selected_components[0]->definition.type == graph){
 				if(ImGui::MenuItem("bode plot")){
-					if(editor->selected_components[0]->pins[0].connected_node &&
-					   editor->selected_components[0]->pins[1].connected_node ||
-					   (!editor->selected_components[0]->pins[0].connected_node->id) &&
-					   (!editor->selected_components[0]->pins[1].connected_node->id) ){
+					if((editor->selected_components[0]->pins[0].connected_node &&
+					    editor->selected_components[0]->pins[1].connected_node )||
+					   ((!editor->selected_components[0]->pins[0].connected_node->id) &&
+					    (!editor->selected_components[0]->pins[1].connected_node->id))){
 						bode_plot(editor, editor->selected_components[0]->pins[0].connected_node->id - 1,
 						editor->selected_components[0]->pins[1].connected_node->id - 1, 1000, 0.01, 100);
 					} else {

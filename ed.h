@@ -198,7 +198,7 @@ inline uint64_t get_num_indep_volt_src(editor_t* p_editor){
 			case curr_cont_volt_source:
 			case curr_cont_curr_source:
 			case operational_amplifier:
-				count++;
+				count += comp.pins[0].connected_node && comp.pins[1].connected_node;
 			default:
 				break;
 		}
@@ -372,6 +372,8 @@ inline void constract_matrices(editor_t* p_editor, GiNaC::matrix* pA, GiNaC::mat
 				A(i-1, j-1) = D(i - n, j - n);
 
 
+	// x = [V]
+	//     [J]
 	GiNaC::matrix x(n+m-1, 1);
 	for(uint64_t i = 1; i < n+m; i++)
 		if(i < n)
@@ -380,6 +382,8 @@ inline void constract_matrices(editor_t* p_editor, GiNaC::matrix* pA, GiNaC::mat
 			x(i-1, 0) = J(i - n, 0);
 
 
+	// Z = [I ]
+	//     [Ev]
 	GiNaC::matrix Z(n+m-1, 1);
 	for(uint64_t i = 1; i < n+m; i++)
 		if(i < n)
