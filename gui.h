@@ -1,6 +1,8 @@
 #ifndef GUI_H_
 #define GUI_H_
 
+#include "matrix.h"
+
 #include "imgui/imgui.h"
 #include "imgui/imgui_internal.h"
 #include "implot/implot.h"
@@ -127,7 +129,7 @@ inline void bode_plot(editor_t* editor, uint64_t nodeID1, uint64_t nodeID2, uint
 
 	constract_matrices(editor, &A, &X, &Z, s, numerical);
 
-	GiNaC::ex result = A.solve(X, Z, GiNaC::solve_algo::gauss);
+	GiNaC::ex result = pivodgos(A, Z);
 	GiNaC::ex H = result[nodeID1]/result[nodeID2];
 
 	for(uint64_t count = 0; count < samples; count++){
