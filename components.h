@@ -67,13 +67,7 @@ struct component_t{
 		double current;
 		double gain;
 	};
-	// represent the node that are connected to anode and cathode
-	// TODO: make it a pin_t[]
-	//pin_t n, p;
-	// these are reserved to dependent votage and curren sources
-	//pin_t cn, cp;
 	pin_t *pins;
-	//TODO: make em component_t[]
 	// this becume important with current controlled sources
 	union{
 		// for F and H components

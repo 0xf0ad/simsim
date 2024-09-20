@@ -196,6 +196,28 @@ inline void show_comp_menu(editor_t* editor){
 				}
 			}
 		}
+		if(ImGui::MenuItem("remove component")){
+			for(size_t i = 0; i < editor->selected_components.size(); i++){
+				// free pins and remove linked links
+				for(size_t j = 0; j < editor->links.size(); j++)
+					for(size_t k = 0; k < editor->selected_components[i]->definition.num_pins; k++)
+						if((editor->links[j].pins[0] == &editor->selected_components[i]->pins[k]) ||
+						   (editor->links[j].pins[1] == &editor->selected_components[i]->pins[k]))
+							editor->links.erase(editor->links.begin() + j);
+				free(editor->selected_components[i]->pins);
+				if(editor->selected_components[i]->L1)
+					free(editor->selected_components[i]->L1);
+				if(editor->selected_components[i]->L2)
+					free(editor->selected_components[i]->L2);
+				editor->components.erase(editor->components.begin() + (editor->selected_components[i] - (&editor->components[0])));
+				// update IDs
+				size_t count = 0;
+				for(size_t j = 0; j < editor->components.size(); j++)
+					if(editor->components[i].definition.type == editor->selected_components[i]->definition.type)
+						editor->components[i].id = count++;
+			}
+		}
+
 		ImGui::EndPopup();
 	}
 
