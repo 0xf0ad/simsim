@@ -177,6 +177,7 @@ inline node_t* merge_nodes(editor_t* editor, node_t* node0, node_t* node1){
 		node1->next->prev = node1->prev;
 
 	free(node1);
+	update_ids(node0);
 	return node0;
 }
 

@@ -1,6 +1,7 @@
 #ifndef GUI_H_
 #define GUI_H_
 
+#include "components.h"
 #include "matrix.h"
 
 #include "imgui/imgui.h"
@@ -8,6 +9,7 @@
 #include "implot/implot.h"
 #include "ed.h"
 #include <GLFW/glfw3.h>
+#include <cstddef>
 
 inline void spawnlink(editor_t* p_editor, pin_t* pin0, pin_t* pin1){
 	if(pin0 != pin1){
@@ -204,6 +206,16 @@ inline void show_comp_menu(editor_t* editor){
 						if((editor->links[j].pins[0] == &editor->selected_components[i]->pins[k]) ||
 						   (editor->links[j].pins[1] == &editor->selected_components[i]->pins[k]))
 							editor->links.erase(editor->links.begin() + j);
+				if(editor->selected_components[i]->definition.type == ground){
+					for(size_t j = 0; j < editor->links.size(); j++){
+						if((editor->links[j].pins[0]->connected_node == editor->selected_components[i]->pins[0].connected_node) ||
+						   (editor->links[j].pins[1]->connected_node == editor->selected_components[i]->pins[0].connected_node) ){
+							editor->links[j].pins[0]->connected_node = NULL;
+							editor->links[j].pins[1]->connected_node = NULL;
+							editor->links.erase(editor->links.begin() + j);
+						}
+					}
+				}
 				free(editor->selected_components[i]->pins);
 				if(editor->selected_components[i]->L1)
 					free(editor->selected_components[i]->L1);
