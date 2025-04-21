@@ -132,6 +132,7 @@ inline void bode_plot(editor_t* editor, uint64_t nodeID1, uint64_t nodeID2, uint
 	constract_matrices(editor, &A, &X, &Z, s, numerical);
 
 	GiNaC::ex result = pivodgos(A, Z);
+	std::cout << result[nodeID1] << "\n" << result[nodeID2] << "\n";
 	GiNaC::ex H = result[nodeID1]/result[nodeID2];
 
 	for(uint64_t count = 0; count < samples; count++){
@@ -159,6 +160,7 @@ inline void bode_plot(editor_t* editor, uint64_t nodeID1, uint64_t nodeID2, uint
 		magni[count] = GiNaC::ex_to<GiNaC::numeric>(mag).to_double();
 		phase[count] = GiNaC::ex_to<GiNaC::numeric>(phi).to_double();
 	}
+	ImPlot::SetNextAxesToFit();
 	show_bode_diag(x, magni, phase, samples);
 }
 
@@ -180,7 +182,7 @@ inline void show_comp_menu(editor_t* editor){
 					   ((!editor->selected_components[0]->pins[0].connected_node->id) &&
 					    (!editor->selected_components[0]->pins[1].connected_node->id))){
 						bode_plot(editor, editor->selected_components[0]->pins[0].connected_node->id - 1,
-						editor->selected_components[0]->pins[1].connected_node->id - 1, 1000, 0.01, 100);
+						editor->selected_components[0]->pins[1].connected_node->id - 1, 10000, 0.1, 100);
 					} else {
 						popupID = ImHashStr("ERR both terminals shal be connected");
 						ImGui::PushOverrideID(popupID);
