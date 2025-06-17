@@ -181,12 +181,14 @@ inline void show_comp_menu(editor_t* editor){
 					    editor->selected_components[0]->pins[1].connected_node )||
 					   ((!editor->selected_components[0]->pins[0].connected_node->id) &&
 					    (!editor->selected_components[0]->pins[1].connected_node->id))){
-						bode_plot(editor, editor->selected_components[0]->pins[0].connected_node->id - 1,
-						editor->selected_components[0]->pins[1].connected_node->id - 1, 10000, 0.1, 100);
-					} else {
-						popupID = ImHashStr("ERR both terminals shal be connected");
+						popupID = ImHashStr("bode diagram options");
 						ImGui::PushOverrideID(popupID);
-						ImGui::OpenPopup("ERR both terminals shal be connected with non-ground nodes");
+						ImGui::OpenPopup("bode diagram options");
+						ImGui::PopID();
+					} else {
+						popupID = ImHashStr("ERR both terminals should be connected");
+						ImGui::PushOverrideID(popupID);
+						ImGui::OpenPopup("ERR both terminals should be connected with non-ground nodes");
 						ImGui::PopID();
 					}
 				}
@@ -269,10 +271,24 @@ inline void show_comp_menu(editor_t* editor){
 				ImGui::CloseCurrentPopup();
 			ImGui::EndPopup();
 		}
-		if(ImGui::BeginPopupModal("ERR both terminals shal be connected")){
-			ImGui::Text("behold, both terminals shal be connected");
+		if(ImGui::BeginPopupModal("ERR both terminals should be connected")){
+			ImGui::Text("behold, lay a thin eye upon both terminals, they shal not stay unreachable");
 			if(ImGui::Button("OK DOKIE"))
 				ImGui::CloseCurrentPopup();
+			ImGui::EndPopup();
+		}
+		if(ImGui::BeginPopupModal("bode diagram options")){
+			static int samples = 1 << 15;
+			static double start = 1e2;
+			static double end = 1e6;
+			ImGui::InputDouble("start", &start);
+			ImGui::InputDouble("end", &end);
+			ImGui::InputInt("samples", &samples);
+			if(ImGui::Button("draw it !!")){
+				bode_plot(editor, editor->selected_components[0]->pins[0].connected_node->id - 1,
+				          editor->selected_components[0]->pins[1].connected_node->id - 1, samples, start, end);
+				ImGui::CloseCurrentPopup();
+			}
 			ImGui::EndPopup();
 		}
 		ImGui::PopID();
