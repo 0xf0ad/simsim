@@ -2,7 +2,6 @@
 #define LOGICCOMP_H_
 
 #include <stdint.h>
-//#include <vector>
 
 typedef struct{
 	void* texID;

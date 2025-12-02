@@ -317,9 +317,9 @@ inline void processInput(GLFWwindow* window, editor_t* editor){
 	static double lastmousepos[2];
 	static bool draged = false;
 	static bool rightpressed = false;
+	static bool leftpressed = false;
 	static bool pin_was_selected = false;
-	//static std::vector<double[2]> joints;
-	double minimum = 10;
+	double minimum = 100 * editor->grid.scale;
 	double x, y;
 	glfwGetCursorPos(window, &x, &y);
 
@@ -329,35 +329,48 @@ inline void processInput(GLFWwindow* window, editor_t* editor){
 			for(uint64_t j = 0; j < editor->components[i].definition.num_pins; j++){
 				double diffx = x - editor->components[i].pins[j].pos[0];
 				double diffy = y - editor->components[i].pins[j].pos[1];
-				if((diffx*diffx + diffy*diffy) < minimum * minimum && !pin_was_selected){
+				if((diffx*diffx + diffy*diffy) < minimum && !pin_was_selected){
 					editor->components[i].pins[j].selected = true;
 					editor->connector = &editor->components[i].pins[j];
 					pin_was_selected = true;
 					mouseovernode = true;
 				}
 			}
-			// TODO :: you should grab it slowlly
-			if(mouse_over_quad(editor, x, y, &editor->components[i].quad) && (!mouseovernode && !editor->connector)){
+			if(mouse_over_quad(editor, x, y, &editor->components[i].quad) && (!mouseovernode && !editor->connector && !leftpressed)){
 				// select component
-				editor->components[i].quad.pos[0] += x - lastmousepos[0],
-				editor->components[i].quad.pos[1] += y - lastmousepos[1];
+				if(std::find(editor->selected_components.begin(), editor->selected_components.end(), &editor->components[i]) == editor->selected_components.end()){
+				editor->selected_components.push_back(&editor->components[i]);
+}
 				break;
 			}
+			for(size_t i = 0; i < editor->selected_components.size(); i++){
+				editor->selected_components[i]->quad.pos[0] += x - lastmousepos[0],
+				editor->selected_components[i]->quad.pos[1] += y - lastmousepos[1];
+			}
 		}
+	leftpressed = true;
 	}if(glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_RELEASE){
+		if(!editor->selected_components.empty())
+			editor->selected_components.clear();
 		if(pin_was_selected){
 			for(uint64_t i = 0; i < editor->components.size(); i++){
 				for(uint64_t j = 0; j < editor->components[i].definition.num_pins; j++){
 					double diffx = x - editor->components[i].pins[j].pos[0];
 					double diffy = y - editor->components[i].pins[j].pos[1];
-					if((diffx*diffx + diffy*diffy) < minimum * minimum)
-						spawnlink(editor, editor->connector, &editor->components[i].pins[j]);
+					if((diffx*diffx + diffy*diffy) < minimum){
+						editor->pins.push_back({.pos = {editor->connector->pos[0], editor->components[i].pins[j].pos[1]},
+						                        .connected_node = editor->connector->connected_node, .selected = false});
+						spawnlink(editor, editor->connector, &editor->pins[editor->pins.size()-1]);
+						spawnlink(editor, &editor->pins[editor->pins.size()-1], &editor->components[i].pins[j]);
+					}
 				}
 			}
 			pin_was_selected = false;
 			editor->connector->selected = false;
 			editor->connector = NULL;
 		}
+
+		leftpressed = false;
 	} if(glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT)){
 		if(lastmousepos[0] != x || lastmousepos[1] != y){
 			editor->grid.offset[0] += x - lastmousepos[0],
@@ -481,9 +494,15 @@ inline void drawlinks(ImDrawList* drawlist, editor_t* editor){
 		                  ImVec2(editor->links[i].pins[1]->pos[0], editor->links[i].pins[1]->pos[1]),
 		                 IM_COL32(0, 0, 0, 255));
 	}
+
+		// TODO: 7iydha ila jab llah sf dak lbug mab9ach khdam		
+		drawlist->AddCircle(ImGui::GetMousePos(), 20,IM_COL32(0, 0, 0, 255));
 	if(editor->connector){
-		drawlist->AddLine(ImVec2(editor->connector->pos[0], editor->connector->pos[1]),
-		                  ImGui::GetMousePos(), IM_COL32(255, 0, 0, 255));
+		ImVec2 mousecord = ImGui::GetMousePos();
+		ImVec2 tmp = abs(mousecord.x - editor->connector->pos[0]) > abs(mousecord.y - editor->connector->pos[1]) ?
+		             ImVec2(mousecord.x, editor->connector->pos[1]) : ImVec2(editor->connector->pos[0], mousecord.y);
+		drawlist->AddLine(ImVec2(editor->connector->pos[0], editor->connector->pos[1]), tmp, IM_COL32(255, 0, 0, 255));
+		drawlist->AddLine(tmp, ImGui::GetMousePos(), IM_COL32(255, 0, 0, 255));
 	}
 }
 

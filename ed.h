@@ -18,6 +18,7 @@
 
 #include <ginac/ginac.h>
 #include <string>
+#include <vector>
 
 typedef struct{
 	double scale;
@@ -36,6 +37,7 @@ typedef struct{
 	pin_t* connector;
 	std::vector<component_t> components;
 	std::vector<link_t> links;
+	std::vector<pin_t> pins;
 	
 	std::vector<component_t*> selected_components;
 	std::vector<link_t*> selected_links;
