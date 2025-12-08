@@ -338,19 +338,18 @@ inline void processInput(GLFWwindow* window, editor_t* editor){
 			}
 			if(mouse_over_quad(editor, x, y, &editor->components[i].quad) && (!mouseovernode && !editor->connector && !leftpressed)){
 				// select component
-				if(std::find(editor->selected_components.begin(), editor->selected_components.end(), &editor->components[i]) == editor->selected_components.end()){
-				editor->selected_components.push_back(&editor->components[i]);
-}
+				if(std::find(editor->selected_components.begin(), editor->selected_components.end(), &editor->components[i]) == editor->selected_components.end())
+					editor->selected_components = {&editor->components[i]};
 				break;
 			}
-			for(size_t i = 0; i < editor->selected_components.size(); i++){
-				editor->selected_components[i]->quad.pos[0] += x - lastmousepos[0],
-				editor->selected_components[i]->quad.pos[1] += y - lastmousepos[1];
-			}
 		}
+		for(size_t i = 0; i < editor->selected_components.size(); i++)
+			editor->selected_components[i]->quad.pos[0] += x - lastmousepos[0],
+			editor->selected_components[i]->quad.pos[1] += y - lastmousepos[1];
+
 	leftpressed = true;
-	}if(glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_RELEASE){
-		if(!editor->selected_components.empty())
+	} if(glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_RELEASE){
+		if(!editor->selected_components.empty() && draged)
 			editor->selected_components.clear();
 		if(pin_was_selected){
 			for(uint64_t i = 0; i < editor->components.size(); i++){
