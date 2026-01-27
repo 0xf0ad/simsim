@@ -30,6 +30,13 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset){
 	static const double maxscale = 4.l, sensitivity = 20.l;
 	//initial value of x, the solution of f(x) = 1
 	static double x = -log(maxscale - 1.l);
+	
+	for(size_t i = 0; i < editor.pins.size(); i++){
+		// ok this is wrong but it needs to be done for  the second loop to be right
+		editor.pins[i]->pos[0] = (editor.pins[i]->pos[0] - editor.grid.offset[0]) / editor.grid.scale;
+		editor.pins[i]->pos[1] = (editor.pins[i]->pos[1] - editor.grid.offset[1]) / editor.grid.scale;
+	}
+
 	double mousepos_towindow[2], mousepos_tocanvas[2];
 	glfwGetCursorPos(window, &mousepos_towindow[0], &mousepos_towindow[1]);
 	mousepos_tocanvas[0] = (mousepos_towindow[0] - editor.grid.offset[0]) / editor.grid.scale;
@@ -40,6 +47,11 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset){
 
 	editor.grid.offset[0] = mousepos_towindow[0] - (mousepos_tocanvas[0] * editor.grid.scale);
 	editor.grid.offset[1] = mousepos_towindow[1] - (mousepos_tocanvas[1] * editor.grid.scale);
+
+	for(size_t i = 0; i < editor.pins.size(); i++){
+		editor.pins[i]->pos[0] = editor.grid.offset[0] + editor.pins[i]->pos[0] * editor.grid.scale;
+		editor.pins[i]->pos[1] = editor.grid.offset[1] + editor.pins[i]->pos[1] * editor.grid.scale;
+	}
 }
 
 int main(void){
@@ -78,6 +90,7 @@ int main(void){
 		.connector = NULL,
 		.components = std::vector<component_t>(),
 		.links = std::vector<link_t>(),
+		.pins = std::vector<pin_t*>(),
 		.selected_components = std::vector<component_t*>(),
 		.selected_links = std::vector<link_t*>()
 	};
@@ -104,7 +117,11 @@ int main(void){
 	ImGui::CreateContext();
 	ImPlot::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
+#ifdef LIGHTTHEME
 	ImGui::StyleColorsLight();
+#else
+	ImGui::StyleColorsDark();
+#endif
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 450 core");
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
@@ -112,7 +129,11 @@ int main(void){
 	io.ConfigDockingWithShift = true;
 	io.ConfigWindowsResizeFromEdges = true;
 	io.IniFilename = "layout.ini";
-	float bgcolor[3] = {.2, .3, .3};
+#ifdef LIGHTTHEME
+	float bgcolor[3] = {0.9f, 0.9f, 0.9f};
+#else
+	float bgcolor[3] = {0.1f, 0.1f, 0.11f};
+#endif
 	double mousex, mousey;
 
 	while(!glfwWindowShouldClose(window)){
@@ -126,11 +147,11 @@ int main(void){
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
 
-		Dockspace(&editor);
+		Dockspace(window, &editor);
 		//process(&editor);
 
 		//ImGui::ShowDemoWindow();
-		processInput(window, &editor);
+		//processInput(window, &editor);
 		showeditormenu(&editor);
 		show_comp_menu(&editor);
 		show_bode_diag(NULL, NULL, NULL, 0);
@@ -151,5 +172,7 @@ int main(void){
 	ImPlot::DestroyContext();
 	ImGui::DestroyContext();
 	glfwTerminate();
+	for(size_t i = 0; i < editor.pins.size(); i++)
+		free(editor.pins[i]);
 	return EXIT_SUCCESS;
 }

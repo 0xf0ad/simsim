@@ -67,7 +67,7 @@ struct component_t{
 		double gain;
 	};
 	pin_t *pins;
-	// this becume important with current controlled sources
+	// this become important with current controlled sources
 	union{
 		// for F and H components
 		struct{
@@ -89,7 +89,6 @@ typedef struct component_t component_t;
 
 typedef struct{
 	pin_t* pins[2];
-	//std::vector<double[2]> joints;
 } link_t;
 
 

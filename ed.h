@@ -37,7 +37,7 @@ typedef struct{
 	pin_t* connector;
 	std::vector<component_t> components;
 	std::vector<link_t> links;
-	std::vector<pin_t> pins;
+	std::vector<pin_t*> pins;
 	
 	std::vector<component_t*> selected_components;
 	std::vector<link_t*> selected_links;
@@ -73,6 +73,14 @@ inline GLuint load_texture(const char* path, int* w, int* h){
 		fprintf(stderr, "failed to load texture: %s\n", path);
 		return -1;
 	}
+
+#ifndef LIGHTTHEME
+	for(int i = 0; i < *w * *h; i++){
+		unsigned char* pixel = data + (i * nrChannels);
+		for(int j = 0; j < nrChannels-1; j++)
+			pixel[j] = 255 - pixel[j];
+	}
+#endif
 
 	GLenum format = GL_FALSE;
 	GLenum encodings[] = {GL_FALSE, GL_RED, GL_FALSE, GL_RGB, GL_RGBA};

@@ -9,9 +9,8 @@
 #include "implot/implot.h"
 #include "ed.h"
 #include <GLFW/glfw3.h>
-#include <cstddef>
 
-inline void spawnlink(editor_t* p_editor, pin_t* pin0, pin_t* pin1){
+inline void spawn_link(editor_t* p_editor, pin_t* pin0, pin_t* pin1){
 	if(pin0 != pin1){
 		if(!pin0->connected_node){
 			if(!pin1->connected_node){
@@ -243,7 +242,8 @@ inline void show_comp_menu(editor_t* editor){
 			ImGui::Text("component settings");
 			const char* value_name[] = {"", "groundness","resestance", "inductance", "capacitance", "k", "voltage",
 			"current", "gain", "gain", "gain", "gain", ""};
-			ImGui::InputDouble(value_name[editor->selected_components[0]->definition.type], &editor->selected_components[0]->caracteristic);
+			ImGui::InputDouble(value_name[editor->selected_components[0]->definition.type],
+			                   &editor->selected_components[0]->caracteristic);
 			if(editor->selected_components[0]->definition.type == curr_cont_curr_source ||
 			   editor->selected_components[0]->definition.type == curr_cont_volt_source){
 				static const char* currently_selected = NULL;
@@ -320,6 +320,11 @@ inline void processInput(GLFWwindow* window, editor_t* editor){
 	static bool leftpressed = false;
 	static bool pin_was_selected = false;
 	double minimum = 100 * editor->grid.scale;
+	
+	// Fix Input Bleeding: Only process GLFW input if the ImGui window is hovered
+	if (!ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup))
+		return;
+
 	double x, y;
 	glfwGetCursorPos(window, &x, &y);
 
@@ -338,14 +343,15 @@ inline void processInput(GLFWwindow* window, editor_t* editor){
 			}
 			if(mouse_over_quad(editor, x, y, &editor->components[i].quad) && (!mouseovernode && !editor->connector && !leftpressed)){
 				// select component
-				if(std::find(editor->selected_components.begin(), editor->selected_components.end(), &editor->components[i]) == editor->selected_components.end())
+				if(std::find(editor->selected_components.begin(), editor->selected_components.end(),
+				             &editor->components[i]) == editor->selected_components.end())
 					editor->selected_components = {&editor->components[i]};
 				break;
 			}
 		}
 		for(size_t i = 0; i < editor->selected_components.size(); i++)
-			editor->selected_components[i]->quad.pos[0] += x - lastmousepos[0],
-			editor->selected_components[i]->quad.pos[1] += y - lastmousepos[1];
+			editor->selected_components[i]->quad.pos[0] += (x - lastmousepos[0]) / editor->grid.scale,
+			editor->selected_components[i]->quad.pos[1] += (y - lastmousepos[1]) / editor->grid.scale;
 
 	leftpressed = true;
 	} if(glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_RELEASE){
@@ -357,10 +363,14 @@ inline void processInput(GLFWwindow* window, editor_t* editor){
 					double diffx = x - editor->components[i].pins[j].pos[0];
 					double diffy = y - editor->components[i].pins[j].pos[1];
 					if((diffx*diffx + diffy*diffy) < minimum){
-						editor->pins.push_back({.pos = {editor->connector->pos[0], editor->components[i].pins[j].pos[1]},
-						                        .connected_node = editor->connector->connected_node, .selected = false});
-						spawnlink(editor, editor->connector, &editor->pins[editor->pins.size()-1]);
-						spawnlink(editor, &editor->pins[editor->pins.size()-1], &editor->components[i].pins[j]);
+						pin_t* joint = (pin_t*)malloc(sizeof(pin_t));
+						joint->pos[0] = editor->connector->pos[0];
+						joint->pos[1] = editor->components[i].pins[j].pos[1];
+						joint->connected_node = editor->connector->connected_node;
+						joint->selected = false;
+						editor->pins.push_back(joint);
+						spawn_link(editor, editor->connector, joint);
+						spawn_link(editor, joint, &editor->components[i].pins[j]);
 					}
 				}
 			}
@@ -372,8 +382,12 @@ inline void processInput(GLFWwindow* window, editor_t* editor){
 		leftpressed = false;
 	} if(glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT)){
 		if(lastmousepos[0] != x || lastmousepos[1] != y){
-			editor->grid.offset[0] += x - lastmousepos[0],
+			editor->grid.offset[0] += x - lastmousepos[0];
 			editor->grid.offset[1] += y - lastmousepos[1];
+			for(size_t i = 0; i < editor->pins.size(); i++){
+				editor->pins[i]->pos[0] += (x - lastmousepos[0]);
+				editor->pins[i]->pos[1] += (y - lastmousepos[1]);
+			}
 			draged = true;
 		}
 		rightpressed = true;
@@ -425,23 +439,32 @@ inline void processInput(GLFWwindow* window, editor_t* editor){
 };
 
 inline void drawgrid(ImDrawList* drawlist, editor_t* editor){
-
 	const float lgrid = editor->grid.step * editor->grid.scale;
 	int markX = editor->grid.offset[0] / lgrid,
 	    markY = editor->grid.offset[1] / lgrid;
 
-	// TODO: edit the function to draw only inside the canvas
-	drawlist->AddQuadFilled(ImVec2(editor->grid.offset[0] - 10, editor->grid.offset[1] + 10),
-	                        ImVec2(editor->grid.offset[0] + 10, editor->grid.offset[1] + 10),
-	                        ImVec2(editor->grid.offset[0] + 10, editor->grid.offset[1] - 10),
-	                        ImVec2(editor->grid.offset[0] - 10, editor->grid.offset[1] - 10),
-	                        ImColor(255, 0, 0, 255));
+#ifdef LIGHTTHEME
 	for(float x = fmodf(editor->grid.offset[0], lgrid); x < editor->resol[0]; x += lgrid, markX--)
 		drawlist->AddLine(ImVec2(x, 0.f), ImVec2(x, editor->resol[1]),
-		                  markX % 8 ? IM_COL32(100, 100, 100, 128) : IM_COL32(0, 0, 0, 255));
+		                  markX % 8 ? IM_COL32(200, 200, 200, 150) : IM_COL32(220, 220, 220, 100));
 	for(float y = fmodf(editor->grid.offset[1], lgrid); y < editor->resol[1]; y += lgrid, markY--)
 		drawlist->AddLine(ImVec2(0.f, y), ImVec2(editor->resol[0], y),
-		                  markY % 8 ? IM_COL32(100, 100, 100, 128) : IM_COL32(0, 0, 0, 255));
+		                  markY % 8 ? IM_COL32(200, 200, 200, 150) : IM_COL32(220, 220, 220, 100));
+#else
+	for(float x = fmodf(editor->grid.offset[0], lgrid); x < editor->resol[0]; x += lgrid, markX--)
+		drawlist->AddLine(ImVec2(x, 0.f), ImVec2(x, editor->resol[1]),
+		                  markX % 8 ? IM_COL32(60, 60, 70, 150) : IM_COL32(45, 45, 50, 100));
+	for(float y = fmodf(editor->grid.offset[1], lgrid); y < editor->resol[1]; y += lgrid, markY--)
+		drawlist->AddLine(ImVec2(0.f, y), ImVec2(editor->resol[0], y),
+		                  markY % 8 ? IM_COL32(60, 60, 70, 150) : IM_COL32(45, 45, 50, 100));
+#endif
+
+	// draw origin crosshair
+	drawlist->AddLine(ImVec2(editor->grid.offset[0] - 7, editor->grid.offset[1] - 7),
+	                  ImVec2(editor->grid.offset[0] + 7, editor->grid.offset[1] + 7), IM_COL32(200, 200, 200, 200), 2.0f);
+	drawlist->AddLine(ImVec2(editor->grid.offset[0] + 7, editor->grid.offset[1] - 7),
+	                  ImVec2(editor->grid.offset[0] - 7, editor->grid.offset[1] + 7), IM_COL32(200, 200, 200, 200), 2.0f);
+
 }
 
 inline void draw_comps(ImDrawList* drawlist, editor_t* editor){
@@ -478,7 +501,11 @@ inline void draw_comps(ImDrawList* drawlist, editor_t* editor){
 					npos = ImVec2((((j >> 1) + 1) * (p[a].x - p[b].x) / 3) + p[b].x,
 				                  (((j >> 1) + 1) * (p[a].y - p[b].y) / 3) + p[b].y);
 			editor->components[i].pins[j].pos[0] = npos.x, editor->components[i].pins[j].pos[1] = npos.y;
+#ifdef LIGHTTHEME
 			ImColor color = IM_COL32(0, 0, 0, 255);
+#else
+			ImColor color = IM_COL32(220, 220, 220, 255);
+#endif
 			if(editor->components[i].pins[j].selected){
 				color = IM_COL32(0, 255, 0, 255);
 			}
@@ -488,14 +515,17 @@ inline void draw_comps(ImDrawList* drawlist, editor_t* editor){
 }
 
 inline void drawlinks(ImDrawList* drawlist, editor_t* editor){
+
 	for(size_t i = 0; i < editor->links.size(); i++){
 		drawlist->AddLine(ImVec2(editor->links[i].pins[0]->pos[0], editor->links[i].pins[0]->pos[1]),
 		                  ImVec2(editor->links[i].pins[1]->pos[0], editor->links[i].pins[1]->pos[1]),
-		                 IM_COL32(0, 0, 0, 255));
+#ifdef LIGHTTHEME
+		                  IM_COL32(0, 0, 0, 255));
+#else
+		                  IM_COL32(200, 200, 255, 255));
+#endif
 	}
 
-		// TODO: 7iydha ila jab llah sf dak lbug mab9ach khdam		
-		drawlist->AddCircle(ImGui::GetMousePos(), 20,IM_COL32(0, 0, 0, 255));
 	if(editor->connector){
 		ImVec2 mousecord = ImGui::GetMousePos();
 		ImVec2 tmp = abs(mousecord.x - editor->connector->pos[0]) > abs(mousecord.y - editor->connector->pos[1]) ?
@@ -547,7 +577,7 @@ inline void Menu(){
 	}
 }
 
-inline void Dockspace(editor_t* editor){
+inline void Dockspace(GLFWwindow* window, editor_t* editor){
 	const ImGuiViewport* viewport = ImGui::GetMainViewport();
 	ImGui::SetNextWindowPos(viewport->Pos);
 	ImGui::SetNextWindowSize(viewport->Size);
@@ -580,6 +610,10 @@ inline void Dockspace(editor_t* editor){
 	ImGui::Begin("Simulation", nullptr, ImGuiWindowFlags_None);
 	ImGui::Text("Text");
 	ImGui::Text("(%.1f FPS)", ImGui::GetIO().Framerate);
+	for(auto pin : editor->pins)
+		ImGui::Text("%f, %f, %p", pin->pos[0], pin->pos[1], pin->connected_node);
+	for(auto link : editor->links)
+		ImGui::Text("%p, %p, %p", link.pins[0], link.pins[1], &link);
 	ImGui::End();
 
 	ImGui::Begin("Properties", nullptr, ImGuiWindowFlags_None);
@@ -599,6 +633,7 @@ inline void Dockspace(editor_t* editor){
 	ImGui::End();
 
 	ImGui::Begin("Diagram", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+	processInput(window, editor);
 	ImDrawList* drawlist = ImGui::GetWindowDrawList();
 	drawgrid(drawlist, editor);
 	draw_comps(drawlist, editor);
