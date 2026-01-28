@@ -148,12 +148,7 @@ int main(void){
 		ImGui::NewFrame();
 
 		Dockspace(window, &editor);
-		//process(&editor);
 
-		//ImGui::ShowDemoWindow();
-		//processInput(window, &editor);
-		showeditormenu(&editor);
-		show_comp_menu(&editor);
 		show_bode_diag(NULL, NULL, NULL, 0);
 
 

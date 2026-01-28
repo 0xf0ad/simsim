@@ -717,6 +717,8 @@ inline void Dockspace(GLFWwindow* window, editor_t* editor){
 	drawgrid(drawlist, editor);
 	draw_comps(drawlist, editor);
 	drawlinks(drawlist, editor);
+	showeditormenu(editor);
+	show_comp_menu(editor);
 	ImGui::End();
 }
 
