@@ -167,11 +167,11 @@ inline void show_comp_menu(editor_t* editor){
 	static ImGuiID popupID = 0;
 	if(ImGui::BeginPopup("component menu")){
 		if(ImGui::MenuItem("rotate by  90 deg"))
-			for(auto comp : editor->selected_components)
-				comp->quad.rot += 1.570755; // PI/2
+			for(size_t i = 0; i < editor->selected_components.size(); i++)
+				editor->selected_components[i]->quad.rot += 1.570755; // pi/2
 		if(ImGui::MenuItem("rotate by -90 deg"))
-			for(auto comp : editor->selected_components)
-				comp->quad.rot -= 1.570755; // PI/2
+			for(size_t i = 0; i < editor->selected_components.size(); i++)
+				editor->selected_components[i]->quad.rot -= 1.570755; // pi/2
 
 		if(editor->selected_components.size() == 1){
 			if(editor->selected_components[0]->definition.type == graph){
@@ -313,99 +313,182 @@ inline void showeditormenu(editor_t* editor){
 	}
 }
 
+inline bool point_near_pin(double x, double y, pin_t* pin, double threshold){
+	double dx = x - pin->pos[0];
+	double dy = y - pin->pos[1];
+	return (dx*dx + dy*dy) < threshold;
+}
+
+inline pin_t* find_pin_at(editor_t* editor, double x, double y, double threshold){
+	for(size_t i = 0; i < editor->components.size(); i++)
+		for(uint8_t j = 0; j < editor->components[i].definition.num_pins; j++)
+			if(point_near_pin(x, y, &editor->components[i].pins[j], threshold))
+				return &editor->components[i].pins[j];
+	return NULL;
+}
+
+inline component_t* find_component_at(editor_t* editor, double x, double y){
+	for(size_t i = 0; i < editor->components.size(); i++)
+		if(mouse_over_quad(editor, x, y, &editor->components[i].quad))
+			return &editor->components[i];
+	return NULL;
+}
+
+inline bool pin_belongs_to(pin_t* pin, component_t* comp){
+	for(uint8_t i = 0; i < comp->definition.num_pins; i++)
+		if(&comp->pins[i] == pin)
+			return true;
+	return false;
+}
+
+inline void update_joints_for_components(editor_t* editor, std::vector<component_t*>& moved_comps){
+	for(size_t i = 0; i < editor->links.size(); i++){
+		link_t* link = &editor->links[i];
+		pin_t* joint = NULL;
+		pin_t* comp_pin = NULL;
+		
+		for(size_t j = 0; j < editor->pins.size(); j++){
+			if(link->pins[0] == editor->pins[j]){
+				joint = editor->pins[j];
+				comp_pin = link->pins[1];
+				break;
+			} else if(link->pins[1] == editor->pins[j]){
+				joint = editor->pins[j];
+				comp_pin = link->pins[0];
+				break;
+			}
+		}
+		
+		if(!joint || !comp_pin) continue;
+		
+		bool pin_moved = false;
+		for(size_t j = 0; j < moved_comps.size(); j++){
+			if(pin_belongs_to(comp_pin, moved_comps[j])){
+				pin_moved = true;
+				break;
+			}
+		}
+		
+		if(pin_moved){
+			for(size_t k = 0; k < editor->links.size(); k++){
+				if(k == i) continue;
+				link_t* other = &editor->links[k];
+				pin_t* other_pin = NULL;
+				if(other->pins[0] == joint)
+					other_pin = other->pins[1];
+				else if(other->pins[1] == joint)
+					other_pin = other->pins[0];
+				
+				if(other_pin){
+					joint->pos[0] = comp_pin->pos[0];
+					joint->pos[1] = other_pin->pos[1];
+					break;
+				}
+			}
+		}
+	}
+}
+
+
 inline void processInput(GLFWwindow* window, editor_t* editor){
 	static double lastmousepos[2];
-	static bool draged = false;
+	static bool grid_dragged = false;
 	static bool rightpressed = false;
 	static bool leftpressed = false;
 	static bool pin_was_selected = false;
-	double minimum = 100 * editor->grid.scale;
-	
-	// Fix Input Bleeding: Only process GLFW input if the ImGui window is hovered
+	static bool dragging_component = false;
+	const double pin_threshold = 100 * editor->grid.scale;
+
 	if (!ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup))
 		return;
 
 	double x, y;
 	glfwGetCursorPos(window, &x, &y);
 
-	if(glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT)){
-		for(uint64_t i = 0; i < editor->components.size(); i++){
-			bool mouseovernode = false;
-			for(uint64_t j = 0; j < editor->components[i].definition.num_pins; j++){
-				double diffx = x - editor->components[i].pins[j].pos[0];
-				double diffy = y - editor->components[i].pins[j].pos[1];
-				if((diffx*diffx + diffy*diffy) < minimum && !pin_was_selected){
-					editor->components[i].pins[j].selected = true;
-					editor->connector = &editor->components[i].pins[j];
+	double dx = x - lastmousepos[0];
+	double dy = y - lastmousepos[1];
+	bool mouse_moved = (dx != 0 || dy != 0);
+
+	if(glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS){
+		if(!leftpressed){
+			if(!dragging_component){
+				pin_t* clicked_pin = find_pin_at(editor, x, y, pin_threshold);
+				if(clicked_pin){
+					clicked_pin->selected = true;
+					editor->connector = clicked_pin;
 					pin_was_selected = true;
-					mouseovernode = true;
 				}
 			}
-			if(mouse_over_quad(editor, x, y, &editor->components[i].quad) && (!mouseovernode && !editor->connector && !leftpressed)){
-				// select component
-				if(std::find(editor->selected_components.begin(), editor->selected_components.end(),
-				             &editor->components[i]) == editor->selected_components.end())
-					editor->selected_components = {&editor->components[i]};
-				break;
+			
+			if(!pin_was_selected && !editor->connector){
+				component_t* clicked_comp = find_component_at(editor, x, y);
+				if(clicked_comp){
+					editor->selected_components = {clicked_comp};
+					dragging_component = true;
+				}
 			}
 		}
-		for(size_t i = 0; i < editor->selected_components.size(); i++)
-			editor->selected_components[i]->quad.pos[0] += (x - lastmousepos[0]) / editor->grid.scale,
-			editor->selected_components[i]->quad.pos[1] += (y - lastmousepos[1]) / editor->grid.scale;
-
-	leftpressed = true;
-	} if(glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_RELEASE){
-		if(!editor->selected_components.empty() && draged)
-			editor->selected_components.clear();
-		if(pin_was_selected){
-			for(uint64_t i = 0; i < editor->components.size(); i++){
-				for(uint64_t j = 0; j < editor->components[i].definition.num_pins; j++){
-					double diffx = x - editor->components[i].pins[j].pos[0];
-					double diffy = y - editor->components[i].pins[j].pos[1];
-					if((diffx*diffx + diffy*diffy) < minimum){
-						pin_t* joint = (pin_t*)malloc(sizeof(pin_t));
-						joint->pos[0] = editor->connector->pos[0];
-						joint->pos[1] = editor->components[i].pins[j].pos[1];
-						joint->connected_node = editor->connector->connected_node;
-						joint->selected = false;
-						editor->pins.push_back(joint);
-						spawn_link(editor, editor->connector, joint);
-						spawn_link(editor, joint, &editor->components[i].pins[j]);
-					}
-				}
+		
+		if(dragging_component && mouse_moved){
+			for(size_t i = 0; i < editor->selected_components.size(); i++){
+				editor->selected_components[i]->quad.pos[0] += dx / editor->grid.scale;
+				editor->selected_components[i]->quad.pos[1] += dy / editor->grid.scale;
 			}
-			pin_was_selected = false;
+		update_joints_for_components(editor, editor->selected_components);
+		}
+
+		leftpressed = true;
+	}
+	else if(leftpressed){
+		leftpressed = false;
+		
+		if(dragging_component){
+			editor->selected_components.clear();
+			dragging_component = false;
+		}
+		
+		if(pin_was_selected && editor->connector){
+			pin_t* target_pin = find_pin_at(editor, x, y, pin_threshold);
+			if(target_pin && target_pin != editor->connector){
+				pin_t* joint = (pin_t*)malloc(sizeof(pin_t));
+				joint->pos[0] = editor->connector->pos[0];
+				joint->pos[1] = target_pin->pos[1];
+				joint->connected_node = editor->connector->connected_node;
+				joint->selected = false;
+				editor->pins.push_back(joint);
+				spawn_link(editor, editor->connector, joint);
+				spawn_link(editor, joint, target_pin);
+			}
 			editor->connector->selected = false;
 			editor->connector = NULL;
+			pin_was_selected = false;
 		}
-
-		leftpressed = false;
-	} if(glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT)){
-		if(lastmousepos[0] != x || lastmousepos[1] != y){
-			editor->grid.offset[0] += x - lastmousepos[0];
-			editor->grid.offset[1] += y - lastmousepos[1];
+	}
+	
+	if(glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS){
+		if(mouse_moved){
+			editor->grid.offset[0] += dx;
+			editor->grid.offset[1] += dy;
 			for(size_t i = 0; i < editor->pins.size(); i++){
-				editor->pins[i]->pos[0] += (x - lastmousepos[0]);
-				editor->pins[i]->pos[1] += (y - lastmousepos[1]);
+				editor->pins[i]->pos[0] += dx;
+				editor->pins[i]->pos[1] += dy;
 			}
-			draged = true;
+			grid_dragged = true;
 		}
 		rightpressed = true;
-	} if(glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_RELEASE){
-		if(!draged && rightpressed){
-			rightpressed = false;
-			for(uint64_t i = 0; i < editor->components.size(); i++){
-				if(mouse_over_quad(editor, x, y, &editor->components[i].quad)){
-					ImGui::OpenPopup("component menu");
-					editor->selected_components = {&editor->components[i]};
-					goto fuckoff;
-				}
+	}
+	else if(rightpressed){
+		if(!grid_dragged){
+			component_t* clicked_comp = find_component_at(editor, x, y);
+			if(clicked_comp){
+				ImGui::OpenPopup("component menu");
+				editor->selected_components = {clicked_comp};
+			} else {
+				ImGui::OpenPopup("editor menu");
 			}
-			ImGui::OpenPopup("editor menu");
-		} else if(rightpressed){
-			draged = rightpressed = false;
 		}
-		fuckoff: ;
+		grid_dragged = false;
+		rightpressed = false;
 	}
 	lastmousepos[0] = x, lastmousepos[1] = y;
 	
@@ -539,13 +622,13 @@ inline void Menu(){
 	static ImGuiID aboutpopupID = 0;
 	if (ImGui::BeginMenuBar()){
 		if (ImGui::BeginMenu("File")){
-			if (ImGui::MenuItem("New", nullptr, false, true)){}
-			if (ImGui::MenuItem("Open", nullptr, false, true)){}
+			if (ImGui::MenuItem("New", NULL, false, true)){}
+			if (ImGui::MenuItem("Open", NULL, false, true)){}
 			ImGui::Separator();
-			if (ImGui::MenuItem("Save", nullptr, false, true)){}
-			if (ImGui::MenuItem("Save As...", nullptr, false, true)){}
+			if (ImGui::MenuItem("Save", NULL, false, true)){}
+			if (ImGui::MenuItem("Save As...", NULL, false, true)){}
 			ImGui::Separator();
-			if (ImGui::MenuItem("Exit", nullptr, false, true)){}
+			if (ImGui::MenuItem("Exit", NULL, false, true)){}
 			ImGui::EndMenu();
 		}
 		//if(ImGui::BeginMenu("solve circuit")){
@@ -554,7 +637,7 @@ inline void Menu(){
 		//}
 
 		if (ImGui::BeginMenu("Help")){
-			if (ImGui::MenuItem("About", nullptr, false, true)){
+			if (ImGui::MenuItem("About", NULL, false, true)){
 				aboutpopupID = ImHashStr("about window");
 				ImGui::PushOverrideID(aboutpopupID);
 				ImGui::OpenPopup( "about window" );
@@ -607,19 +690,15 @@ inline void Dockspace(GLFWwindow* window, editor_t* editor){
 	Menu();
 	ImGui::End();
 
-	ImGui::Begin("Simulation", nullptr, ImGuiWindowFlags_None);
+	ImGui::Begin("Simulation", NULL, ImGuiWindowFlags_None);
 	ImGui::Text("Text");
 	ImGui::Text("(%.1f FPS)", ImGui::GetIO().Framerate);
-	for(auto pin : editor->pins)
-		ImGui::Text("%f, %f, %p", pin->pos[0], pin->pos[1], pin->connected_node);
-	for(auto link : editor->links)
-		ImGui::Text("%p, %p, %p", link.pins[0], link.pins[1], &link);
 	ImGui::End();
 
-	ImGui::Begin("Properties", nullptr, ImGuiWindowFlags_None);
+	ImGui::Begin("Properties", NULL, ImGuiWindowFlags_None);
 	ImGui::End();
 
-	ImGui::Begin("Explorer", nullptr, ImGuiWindowFlags_None);
+	ImGui::Begin("Explorer", NULL, ImGuiWindowFlags_None);
 	ImGui::Text("numnoded : %lu", get_num_nodes(editor));
 	for(size_t i = 0; i < editor->components.size(); i++){
 		ImGui::Text("%s %lu, pins:", editor->components[i].definition.name, editor->components[i].id);
@@ -632,7 +711,7 @@ inline void Dockspace(GLFWwindow* window, editor_t* editor){
 	}
 	ImGui::End();
 
-	ImGui::Begin("Diagram", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+	ImGui::Begin("Diagram", NULL, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 	processInput(window, editor);
 	ImDrawList* drawlist = ImGui::GetWindowDrawList();
 	drawgrid(drawlist, editor);
