@@ -26,6 +26,91 @@ typedef struct{
 	double offset[2];
 } grid_t;
 
+enum em_shape_type {
+    EM_SHAPE_RECT,
+    EM_SHAPE_CIRCLE,
+    EM_SHAPE_POLYGON,
+};
+
+enum em_source_type {
+    EM_SOURCE_POINT,      // Point source (omnidirectional)
+    EM_SOURCE_LINE,       // Line source
+    EM_SOURCE_PLANE,      // Plane wave
+};
+
+enum em_probe_type {
+    EM_PROBE_E_FIELD,     // Electric field probe
+    EM_PROBE_H_FIELD,     // Magnetic field probe
+    EM_PROBE_POWER,       // Power/Poynting vector probe
+};
+
+// EM wave source
+struct em_source_t {
+    em_source_type type;
+    ImVec2 pos;           // Position (canvas coords)
+    float frequency;      // Hz
+    float amplitude;      // V/m or A/m
+    float phase;          // radians
+    float angle;          // direction for plane wave (radians)
+    bool active;
+    char name[32];
+};
+
+// EM field probe
+struct em_probe_t {
+    em_probe_type type;
+    ImVec2 pos;           // Position (canvas coords)
+    float value;          // Current measured value
+    bool active;
+    char name[32];
+};
+
+// FDTD simulation grid
+struct fdtd_grid_t {
+    int nx, ny;           // Grid dimensions
+    float dx, dy;         // Cell size (meters)
+    float dt;             // Time step (seconds)
+    int time_step;        // Current time step
+    
+    // Field arrays (2D Yee grid for TM mode: Ez, Hx, Hy)
+    std::vector<float> Ez;  // Electric field (z-component)
+    std::vector<float> Hx;  // Magnetic field (x-component)
+    std::vector<float> Hy;  // Magnetic field (y-component)
+    
+    // Material property grids
+    std::vector<float> eps;   // Permittivity at each cell
+    std::vector<float> mu;    // Permeability at each cell
+    std::vector<float> sigma; // Conductivity at each cell
+    
+    bool initialized;
+    bool running;
+    float max_field;      // For visualization scaling
+};
+
+// Material properties for a region
+struct em_material_t {
+    float conductivity;   // sigma  (S/m)  — 0 = perfect dielectric
+    float permittivity;   // eps_r  (relative)
+    float permeability;   // mu_r   (relative)
+    char  name[32];
+    ImVec4 color;         // RGBA fill color
+};
+
+// A single drawn shape
+struct em_shape_t {
+    em_shape_type type;
+    em_material_t material;
+
+    // RECT: p0 = top-left corner, p1 = bottom-right corner (canvas coords)
+    // CIRCLE: p0 = centre, radius stored in p1.x
+    // POLYGON: vertices stored in poly_pts
+    ImVec2 p0, p1;
+    std::vector<ImVec2> poly_pts;   // polygon vertices (canvas coords)
+
+    bool selected;
+};
+
+
 // you can think of it as a sceen struct
 typedef struct{
 	double aspectratio;
@@ -41,6 +126,31 @@ typedef struct{
 	
 	std::vector<component_t*> selected_components;
 	std::vector<link_t*> selected_links;
+
+	// EM simulation data
+	std::vector<em_shape_t> shapes;
+	std::vector<em_source_t> sources;
+	std::vector<em_probe_t> probes;
+	em_material_t active_material;
+	fdtd_grid_t fdtd;
+
+	// drawing state
+	em_shape_type draw_mode;   // what we are about to draw
+	bool          drawing;     // mid-draw
+	ImVec2        draw_start;  // first click (canvas coords)
+	std::vector<ImVec2> poly_wip; // polygon work-in-progress vertices
+
+	// selection / interaction
+	int  selected_idx;         // -1 = none (shape)
+	int  selected_source_idx;  // -1 = none
+	int  selected_probe_idx;   // -1 = none
+	
+	bool panning;
+	ImVec2 pan_last;
+
+	// shape editing
+	bool  editing_shape;
+	int   edit_handle;         // which handle is being dragged (-1 = none, 0-7 = corners/edges)
 } editor_t;
 
 

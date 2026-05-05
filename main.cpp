@@ -17,7 +17,8 @@
 #define WIN_HEIGHT 720
 
 // ik global variables are bad but im not awware of any other methode as simple as this
-editor_t editor;
+editor_t   editor;
+app_mode_t  app_mode = MODE_SELECT;
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height){
 	glViewport(0, 0, width, height);
@@ -26,6 +27,7 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height){
 }
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset){
+	//if (app_mode != MODE_CIRCUIT) return; // EM zoom is handled inside ImGui
 	// we use the segmoid function as x its input and yoffset as dx/dt and scale as output
 	static const double maxscale = 4.l, sensitivity = 20.l;
 	//initial value of x, the solution of f(x) = 1
@@ -92,7 +94,30 @@ int main(void){
 		.links = std::vector<link_t>(),
 		.pins = std::vector<pin_t*>(),
 		.selected_components = std::vector<component_t*>(),
-		.selected_links = std::vector<link_t*>()
+		.selected_links = std::vector<link_t*>(),
+
+		.shapes = std::vector<em_shape_t>(),
+		.sources = std::vector<em_source_t>(),
+		.probes = std::vector<em_probe_t>(),
+		.active_material = {
+			.conductivity = 5.8e7f,
+			.permittivity = 1.0f,
+			.permeability = 1.0f,
+			.name = "Conductor",
+			.color = ImVec4(1.0f, 0.8f, 0.2f, 0.55f),
+		},
+		.fdtd = {0, 0, 0.f, 0.f, 0.f, 0, {}, {}, {}, {}, {}, {}, false, false, 0.f},
+		.draw_mode = EM_SHAPE_RECT,
+		.drawing = 0,
+		.draw_start = ImVec2(0, 0),
+		.poly_wip = std::vector<ImVec2>(),
+		.selected_idx = -1,
+		.selected_source_idx = -1,
+		.selected_probe_idx = -1,
+		.panning = 0,
+		.pan_last = ImVec2(0, 0),
+		.editing_shape = false,
+		.edit_handle = -1
 	};
 
 	glfwMakeContextCurrent(window);
@@ -147,9 +172,15 @@ int main(void){
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
 
-		Dockspace(window, &editor);
-
-		show_bode_diag(NULL, NULL, NULL, 0);
+		if (app_mode == MODE_SELECT) {
+			show_mode_select(&app_mode);
+		} else {
+			Dockspace(window, &editor, app_mode);
+			// Run FDTD simulation if in EM mode and running
+			if (app_mode == MODE_EM && editor.fdtd.running) {
+				fdtd_step(&editor);
+			}
+		}
 
 
 		ImGui::Render();

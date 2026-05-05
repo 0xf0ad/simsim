@@ -2,6 +2,7 @@
 #define GUI_H_
 
 #include "components.h"
+#include "em_editor.h"
 #include "matrix.h"
 
 #include "imgui/imgui.h"
@@ -9,6 +10,86 @@
 #include "implot/implot.h"
 #include "ed.h"
 #include <GLFW/glfw3.h>
+
+// Application mode — defined here, instantiated in main.cpp
+enum app_mode_t { MODE_SELECT, MODE_CIRCUIT, MODE_EM };
+extern app_mode_t app_mode;
+
+inline void show_mode_select(app_mode_t* mode) {
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(vp->GetCenter(), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(520, 190), ImGuiCond_Always);
+
+    ImGuiWindowFlags flags =
+        ImGuiWindowFlags_NoTitleBar   |
+        ImGuiWindowFlags_NoResize     |
+        ImGuiWindowFlags_NoMove       |
+        ImGuiWindowFlags_NoScrollbar  |
+        ImGuiWindowFlags_NoCollapse;
+
+    ImGui::Begin("##mode_select", NULL, flags);
+
+    // Title
+    ImGui::SetCursorPosX((ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize("Select Simulation Mode").x) * 0.5f);
+    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Select Simulation Mode");
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    float btn_w = 200.0f, btn_h = 110.0f;
+    float total_w = btn_w * 2 + ImGui::GetStyle().ItemSpacing.x;
+    ImGui::SetCursorPosX((ImGui::GetContentRegionAvail().x - total_w) * 0.5f + ImGui::GetStyle().WindowPadding.x);
+
+    // --- Circuit button ---
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.15f, 0.35f, 0.55f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.20f, 0.50f, 0.75f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.10f, 0.25f, 0.45f, 1.0f));
+    if (ImGui::Button("##circuit_btn", ImVec2(btn_w, btn_h)))
+        *mode = MODE_CIRCUIT;
+    ImGui::PopStyleColor(3);
+
+    // overlay text on the button
+    ImVec2 btn_min = ImGui::GetItemRectMin();
+    ImVec2 btn_max = ImGui::GetItemRectMax();
+    ImVec2 btn_ctr((btn_min.x + btn_max.x) * 0.5f, (btn_min.y + btn_max.y) * 0.5f);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const char* lbl1 = "Circuit";
+    const char* lbl2 = "AC Analysis";
+    ImVec2 s1 = ImGui::CalcTextSize(lbl1);
+    ImVec2 s2 = ImGui::CalcTextSize(lbl2);
+    dl->AddText(ImVec2(btn_ctr.x - s1.x*0.5f, btn_ctr.y - s1.y - 4), IM_COL32(255,255,255,255), lbl1);
+    dl->AddText(ImVec2(btn_ctr.x - s2.x*0.5f, btn_ctr.y + 4),        IM_COL32(200,230,255,220), lbl2);
+
+	ImGui::SameLine();
+
+    // --- EM button ---
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.15f, 0.45f, 0.30f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.20f, 0.65f, 0.42f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.10f, 0.32f, 0.22f, 1.0f));
+    if (ImGui::Button("##em_btn", ImVec2(btn_w, btn_h)))
+        *mode = MODE_EM;
+    ImGui::PopStyleColor(3);
+
+    ImVec2 b2_min = ImGui::GetItemRectMin();
+    ImVec2 b2_max = ImGui::GetItemRectMax();
+    ImVec2 b2_ctr((b2_min.x + b2_max.x) * 0.5f, (b2_min.y + b2_max.y) * 0.5f);
+    const char* lbl3 = "EM Waves";
+    const char* lbl4 = "Medium Editor";
+    ImVec2 s3 = ImGui::CalcTextSize(lbl3);
+    ImVec2 s4 = ImGui::CalcTextSize(lbl4);
+    dl->AddText(ImVec2(b2_ctr.x - s3.x*0.5f, b2_ctr.y - s3.y - 4), IM_COL32(255,255,255,255), lbl3);
+    dl->AddText(ImVec2(b2_ctr.x - s4.x*0.5f, b2_ctr.y + 4),        IM_COL32(200,255,220,220), lbl4);
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+    ImGui::SetCursorPosX(ImGui::GetStyle().WindowPadding.x);
+    ImGui::SetCursorPosX((ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize("Choose a mode to begin. You can switch modes from the View menu.").x) * 0.5f);
+    ImGui::TextDisabled("Choose a mode to begin. You can switch modes from the View menu.");
+
+    ImGui::End();
+}
 
 inline void spawn_link(editor_t* p_editor, pin_t* pin0, pin_t* pin1){
 	if(pin0 != pin1){
@@ -434,19 +515,19 @@ inline void processInput(GLFWwindow* window, editor_t* editor){
 				editor->selected_components[i]->quad.pos[0] += dx / editor->grid.scale;
 				editor->selected_components[i]->quad.pos[1] += dy / editor->grid.scale;
 			}
-		update_joints_for_components(editor, editor->selected_components);
+			update_joints_for_components(editor, editor->selected_components);
 		}
 
 		leftpressed = true;
 	}
 	else if(leftpressed){
 		leftpressed = false;
-		
+
 		if(dragging_component){
 			editor->selected_components.clear();
 			dragging_component = false;
 		}
-		
+
 		if(pin_was_selected && editor->connector){
 			pin_t* target_pin = find_pin_at(editor, x, y, pin_threshold);
 			if(target_pin && target_pin != editor->connector){
@@ -555,6 +636,8 @@ inline void draw_comps(ImDrawList* drawlist, editor_t* editor){
 		const Quad_t* q = &editor->components[i].quad;
 		const double cosr = cos(q->rot), sinr = sin(q->rot);
 
+		// DONT TOUCH
+		// this math was a nightmare to figure out
 		ImVec2 p[4];
 		p[0] = ImVec2(editor->grid.offset[0] + ((q->pos[0] - (((q->dims[0] * cosr) + (q->dims[1] * sinr)) / 4.l)) * editor->grid.scale),
 		              editor->grid.offset[1] + ((q->pos[1] + (((q->dims[1] * cosr) - (q->dims[0] * sinr)) / 4.l)) * editor->grid.scale));
@@ -589,9 +672,8 @@ inline void draw_comps(ImDrawList* drawlist, editor_t* editor){
 #else
 			ImColor color = IM_COL32(220, 220, 220, 255);
 #endif
-			if(editor->components[i].pins[j].selected){
+			if(editor->components[i].pins[j].selected)
 				color = IM_COL32(0, 255, 0, 255);
-			}
 			drawlist->AddCircleFilled(npos, 7.5 * editor->grid.scale, color);
 		}
 	}
@@ -631,10 +713,17 @@ inline void Menu(){
 			if (ImGui::MenuItem("Exit", NULL, false, true)){}
 			ImGui::EndMenu();
 		}
-		//if(ImGui::BeginMenu("solve circuit")){
-		//	if(ImGui::MenuItem("solve for G matrix")){}
-		//	ImGui::EndMenu();
-		//}
+
+		if (ImGui::BeginMenu("View")){
+			if (ImGui::MenuItem("Circuit AC Analysis"))
+				app_mode = MODE_CIRCUIT;
+			if (ImGui::MenuItem("EM Wave Simulation"))
+				app_mode = MODE_EM;
+			ImGui::Separator();
+			if (ImGui::MenuItem("Mode Selection Screen"))
+				app_mode = MODE_SELECT;
+			ImGui::EndMenu();
+		}
 
 		if (ImGui::BeginMenu("Help")){
 			if (ImGui::MenuItem("About", NULL, false, true)){
@@ -660,7 +749,484 @@ inline void Menu(){
 	}
 }
 
-inline void Dockspace(GLFWwindow* window, editor_t* editor){
+
+inline void em_editor_panel(GLFWwindow* window, editor_t* c, ImGuiID dsid) {
+    // ---- Toolbar / sidebar ------------------------------------------------
+    ImGui::SetNextWindowDockID(dsid, ImGuiCond_FirstUseEver);
+    ImGui::Begin("EM Material Palette", NULL, ImGuiWindowFlags_None);
+
+    ImGui::SeparatorText("Draw Mode");
+    if (ImGui::RadioButton("Rectangle",  c->draw_mode == EM_SHAPE_RECT))
+        c->draw_mode = EM_SHAPE_RECT;
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Circle",     c->draw_mode == EM_SHAPE_CIRCLE))
+        c->draw_mode = EM_SHAPE_CIRCLE;
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Polygon",    c->draw_mode == EM_SHAPE_POLYGON))
+        c->draw_mode = EM_SHAPE_POLYGON;
+
+    ImGui::Spacing();
+    ImGui::SeparatorText("Active Material");
+
+    ImGui::InputText("Name", c->active_material.name, 32);
+    ImGui::InputFloat("Conductivity (S/m)",  &c->active_material.conductivity, 0, 0, "%.3e");
+    ImGui::InputFloat("Permittivity (eps_r)", &c->active_material.permittivity, 0.1f, 1.0f, "%.2f");
+    ImGui::InputFloat("Permeability (mu_r)",  &c->active_material.permeability, 0.1f, 1.0f, "%.2f");
+    ImGui::ColorEdit4("Fill color", (float*)&c->active_material.color);
+
+    ImGui::Spacing();
+    ImGui::SeparatorText("Presets");
+    for (int i = 0; i < em_num_presets; i++) {
+        ImGui::PushID(i);
+        ImVec4 pc = em_presets[i].color;
+        pc.w = 1.0f;
+        ImGui::ColorButton("##col", pc, ImGuiColorEditFlags_NoTooltip, ImVec2(14,14));
+        ImGui::SameLine();
+        if (ImGui::Button(em_presets[i].name))
+            c->active_material = em_presets[i];
+        ImGui::PopID();
+    }
+
+    ImGui::Spacing();
+    ImGui::SeparatorText("Selected Shape");
+    if (c->selected_idx >= 0 && c->selected_idx < (int)c->shapes.size()) {
+        em_shape_t* sel = &c->shapes[c->selected_idx];
+        ImGui::InputText("Name##sel",  sel->material.name, 32);
+        ImGui::InputFloat("Conductivity##sel",  &sel->material.conductivity, 0, 0, "%.3e");
+        ImGui::InputFloat("Permittivity##sel",  &sel->material.permittivity, 0.1f, 1.0f, "%.2f");
+        ImGui::InputFloat("Permeability##sel",  &sel->material.permeability, 0.1f, 1.0f, "%.2f");
+        ImGui::ColorEdit4("Color##sel", (float*)&sel->material.color);
+        if (ImGui::Button("Delete shape")) {
+            c->shapes.erase(c->shapes.begin() + c->selected_idx);
+            c->selected_idx = -1;
+        }
+    } else {
+        ImGui::TextDisabled("(click a shape to select)");
+    }
+
+    ImGui::Spacing();
+    ImGui::SeparatorText("Canvas");
+    if (ImGui::Button("Clear all")) {
+        c->shapes.clear();
+        c->selected_idx = -1;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Re-center")) 
+        c->grid.offset[0] = c->grid.offset[1] = 0;
+
+		ImGui::Text("Shapes: %d", (int)c->shapes.size());
+
+    ImGui::Spacing();
+    ImGui::SeparatorText("Simulation");
+    
+    if (!c->fdtd.initialized) {
+        if (ImGui::Button("Initialize Grid")) {
+            fdtd_init_grid(c, 0.001f);  // 1mm cells
+        }
+        ImGui::TextWrapped("Grid not initialized. Click to create simulation grid from shapes.");
+    } else {
+        ImGui::Text("Grid: %dx%d cells", c->fdtd.nx, c->fdtd.ny);
+        ImGui::Text("Cell size: %.3f mm", c->fdtd.dx * 1000.0f);
+        ImGui::Text("Time step: %d", c->fdtd.time_step);
+        ImGui::Text("Max field: %.2e V/m", c->fdtd.max_field);
+        
+        if (c->fdtd.running) {
+            if (ImGui::Button("Pause")) c->fdtd.running = false;
+            ImGui::SameLine();
+            if (ImGui::Button("Reset")) {
+                c->fdtd.time_step = 0;
+                std::fill(c->fdtd.Ez.begin(), c->fdtd.Ez.end(), 0.0f);
+                std::fill(c->fdtd.Hx.begin(), c->fdtd.Hx.end(), 0.0f);
+                std::fill(c->fdtd.Hy.begin(), c->fdtd.Hy.end(), 0.0f);
+            }
+        } else {
+            if (ImGui::Button("Run")) c->fdtd.running = true;
+            ImGui::SameLine();
+            if (ImGui::Button("Step")) fdtd_step(c);
+        }
+        
+        if (ImGui::Button("Reinitialize")) {
+            fdtd_init_grid(c, 0.001f);
+        }
+    }
+
+    ImGui::Spacing();
+    ImGui::SeparatorText("Sources");
+    
+    if (ImGui::Button("Add Point Source")) {
+        em_source_t src = {
+            .type = EM_SOURCE_POINT,
+            .pos = ImVec2(5.0f, 5.0f),
+            .frequency = 1e9f,  // 1 GHz
+            .amplitude = 1.0f,
+            .phase = 0.0f,
+            .angle = 0.0f,
+            .active = true,
+        };
+        snprintf(src.name, 32, "Source%d", (int)c->sources.size());
+        c->sources.push_back(src);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Add Plane Wave")) {
+        em_source_t src = {
+            .type = EM_SOURCE_PLANE,
+            .pos = ImVec2(2.0f, 5.0f),
+            .frequency = 1e9f,
+            .amplitude = 1.0f,
+            .phase = 0.0f,
+            .angle = 0.0f,
+            .active = true,
+        };
+        snprintf(src.name, 32, "Plane%d", (int)c->sources.size());
+        c->sources.push_back(src);
+    }
+    
+    for (int i = 0; i < (int)c->sources.size(); i++) {
+        ImGui::PushID(i);
+        bool sel = (c->selected_source_idx == i);
+        if (ImGui::Selectable(c->sources[i].name, sel)) {
+            c->selected_source_idx = i;
+            c->selected_idx = -1;
+            c->selected_probe_idx = -1;
+        }
+        ImGui::PopID();
+    }
+    
+    if (c->selected_source_idx >= 0 && c->selected_source_idx < (int)c->sources.size()) {
+        em_source_t* src = &c->sources[c->selected_source_idx];
+        ImGui::Spacing();
+        ImGui::Text("Source Properties:");
+        ImGui::Checkbox("Active##src", &src->active);
+        ImGui::InputFloat("Frequency (Hz)##src", &src->frequency, 0, 0, "%.3e");
+        ImGui::InputFloat("Amplitude##src", &src->amplitude, 0.1f, 1.0f, "%.2f");
+        ImGui::InputFloat("Phase (rad)##src", &src->phase, 0.1f, 1.0f, "%.2f");
+        if (src->type == EM_SOURCE_PLANE) {
+            ImGui::SliderAngle("Angle##src", &src->angle);
+        }
+        if (ImGui::Button("Delete Source")) {
+            c->sources.erase(c->sources.begin() + c->selected_source_idx);
+            c->selected_source_idx = -1;
+        }
+    }
+
+    ImGui::Spacing();
+    ImGui::SeparatorText("Probes");
+    
+    if (ImGui::Button("Add E-Field Probe")) {
+        em_probe_t probe = {
+            .type = EM_PROBE_E_FIELD,
+            .pos = ImVec2(7.0f, 5.0f),
+            .value = 0.0f,
+            .active = true,
+        };
+        snprintf(probe.name, 32, "E%d", (int)c->probes.size());
+        c->probes.push_back(probe);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Add H-Field Probe")) {
+        em_probe_t probe = {
+            .type = EM_PROBE_H_FIELD,
+            .pos = ImVec2(7.0f, 5.0f),
+            .value = 0.0f,
+            .active = true,
+        };
+        snprintf(probe.name, 32, "H%d", (int)c->probes.size());
+        c->probes.push_back(probe);
+    }
+    
+    for (int i = 0; i < (int)c->probes.size(); i++) {
+        ImGui::PushID(100 + i);
+        bool sel = (c->selected_probe_idx == i);
+        if (ImGui::Selectable(c->probes[i].name, sel)) {
+            c->selected_probe_idx = i;
+            c->selected_idx = -1;
+            c->selected_source_idx = -1;
+        }
+        ImGui::PopID();
+    }
+    
+    if (c->selected_probe_idx >= 0 && c->selected_probe_idx < (int)c->probes.size()) {
+        em_probe_t* probe = &c->probes[c->selected_probe_idx];
+        ImGui::Spacing();
+        ImGui::Text("Probe Properties:");
+        ImGui::Checkbox("Active##probe", &probe->active);
+        ImGui::Text("Value: %.3e", probe->value);
+        if (ImGui::Button("Delete Probe")) {
+            c->probes.erase(c->probes.begin() + c->selected_probe_idx);
+            c->selected_probe_idx = -1;
+        }
+    }
+
+    ImGui::Spacing();
+    ImGui::SeparatorText("Help");
+    ImGui::TextWrapped(
+        "Left-click drag: draw shape\n"
+        "Polygon: click vertices, double-click to close\n"
+        "Right-drag: pan\n"
+        "Scroll: zoom\n"
+        "Click shape: select\n"
+        "Esc: cancel polygon"
+    );
+
+	ImGui::End();
+
+	// ---- Canvas -----------------------------------------------------------
+	// Dock into the EM dockspace on first run
+	ImGui::SetNextWindowDockID(dsid, ImGuiCond_FirstUseEver);
+	ImGui::Begin("EM Canvas", NULL,
+	             ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+	ImVec2 huh = ImGui::GetCursorScreenPos();
+	ImVec2 huh2 = ImGui::GetContentRegionAvail();
+	ImVec2 canvas_size   = ImVec2(huh.x + huh2.x, huh.y + huh2.y);
+
+	// invisible button to capture input
+	ImGui::InvisibleButton("em_canvas_area", canvas_size,
+	                       ImGuiButtonFlags_MouseButtonLeft  |
+	                       ImGuiButtonFlags_MouseButtonRight |
+	                       ImGuiButtonFlags_MouseButtonMiddle);
+	bool hovered = ImGui::IsItemHovered();
+	bool lclick  = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+	bool rdown   = ImGui::IsMouseDown(ImGuiMouseButton_Right);
+
+	ImVec2 mousepos = ImGui::GetMousePos();
+	ImVec2 mouse_canvas = ImVec2(
+		(mousepos.x - c->grid.offset[0]) / c->grid.scale,
+		(mousepos.y - c->grid.offset[1]) / c->grid.scale);
+    // ---- Right-drag to pan ------------------------------------------------
+    if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+        c->pan_last = mousepos;
+    if (rdown && hovered) {
+        ImVec2 delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Right, 0.0f);
+        ImGui::ResetMouseDragDelta(ImGuiMouseButton_Right);
+        c->grid.offset[0] += delta.x;
+        c->grid.offset[1] += delta.y;
+    }
+
+    // ---- Left-click: draw / select / edit ----------------------------------------
+    if (hovered && lclick) {
+        // Check if clicking on edit handle first
+        if (c->selected_idx >= 0 && c->selected_idx < (int)c->shapes.size()) {
+            int handle = em_hit_edit_handle(c, &c->shapes[c->selected_idx], mouse_canvas);
+            if (handle >= 0) {
+                c->editing_shape = true;
+                c->edit_handle = handle;
+            }
+        }
+        
+        if (!c->editing_shape) {
+            if (c->draw_mode == EM_SHAPE_POLYGON) {
+                // double-click closes polygon
+                if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                    if (c->poly_wip.size() >= 3) {
+                        em_shape_t s;
+                        s.type     = EM_SHAPE_POLYGON;
+                        s.material = c->active_material;
+                        s.poly_pts = c->poly_wip;
+                        s.selected = false;
+                        c->shapes.push_back(s);
+                    }
+                    c->poly_wip.clear();
+                    c->drawing = false;
+                } else {
+                    c->poly_wip.push_back(mouse_canvas);
+                    c->drawing = true;
+                }
+            } else {
+                if (!c->drawing) {
+                    // Check sources
+                    bool hit_src = false;
+                    for (int i = (int)c->sources.size() - 1; i >= 0; i--) {
+                        float dx = mouse_canvas.x - c->sources[i].pos.x;
+                        float dy = mouse_canvas.y - c->sources[i].pos.y;
+                        if (dx*dx + dy*dy < 0.3f*0.3f) {
+                            c->selected_source_idx = i;
+                            c->selected_idx = -1;
+                            c->selected_probe_idx = -1;
+                            hit_src = true;
+                            break;
+                        }
+                    }
+                    
+                    // Check probes
+                    if (!hit_src) {
+                        for (int i = (int)c->probes.size() - 1; i >= 0; i--) {
+                            float dx = mouse_canvas.x - c->probes[i].pos.x;
+                            float dy = mouse_canvas.y - c->probes[i].pos.y;
+                            if (dx*dx + dy*dy < 0.3f*0.3f) {
+                                c->selected_probe_idx = i;
+                                c->selected_idx = -1;
+                                c->selected_source_idx = -1;
+                                hit_src = true;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Check shapes
+                    if (!hit_src) {
+                        bool hit = false;
+                        for (int i = (int)c->shapes.size() - 1; i >= 0; i--) {
+                            if (em_hit_shape(&c->shapes[i], mouse_canvas)) {
+                                c->selected_idx = i;
+                                c->selected_source_idx = -1;
+                                c->selected_probe_idx = -1;
+                                hit = true;
+                                break;
+                            }
+                        }
+                        if (!hit) {
+                            c->selected_idx = -1;
+                            c->selected_source_idx = -1;
+                            c->selected_probe_idx = -1;
+                            c->draw_start = mouse_canvas;
+                            c->drawing    = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Handle shape editing drag
+    if (c->editing_shape && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+        if (c->selected_idx >= 0 && c->selected_idx < (int)c->shapes.size()) {
+            em_shape_t* s = &c->shapes[c->selected_idx];
+            if (s->type == EM_SHAPE_RECT) {
+                // Update corner/edge based on handle
+                if (c->edit_handle == 0 || c->edit_handle == 1 || c->edit_handle == 2 || c->edit_handle == 7) {
+                    s->p0.y = mouse_canvas.y;
+                }
+                if (c->edit_handle == 4 || c->edit_handle == 5 || c->edit_handle == 6 || c->edit_handle == 3) {
+                    s->p1.y = mouse_canvas.y;
+                }
+                if (c->edit_handle == 0 || c->edit_handle == 6 || c->edit_handle == 7 || c->edit_handle == 1) {
+                    s->p0.x = mouse_canvas.x;
+                }
+                if (c->edit_handle == 2 || c->edit_handle == 3 || c->edit_handle == 4 || c->edit_handle == 5) {
+                    s->p1.x = mouse_canvas.x;
+                }
+            } else if (s->type == EM_SHAPE_CIRCLE) {
+                // Update radius
+                float dx = mouse_canvas.x - s->p0.x;
+                float dy = mouse_canvas.y - s->p0.y;
+                s->p1.x = sqrtf(dx*dx + dy*dy);
+            }
+        }
+    }
+    
+    if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+        c->editing_shape = false;
+        c->edit_handle = -1;
+    }
+
+    // finish rect/circle on mouse release
+    if (c->drawing && c->draw_mode != EM_SHAPE_POLYGON) {
+        if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+            ImVec2 end = mouse_canvas;
+            float dx = end.x - c->draw_start.x;
+            float dy = end.y - c->draw_start.y;
+            bool big_enough = (dx*dx + dy*dy) > (4.0f / (c->grid.scale * c->grid.scale));
+            if (big_enough) {
+                em_shape_t s;
+                s.type     = c->draw_mode;
+                s.material = c->active_material;
+                s.selected = false;
+                if (c->draw_mode == EM_SHAPE_RECT) {
+                    s.p0 = c->draw_start;
+                    s.p1 = end;
+                } else { // circle
+                    s.p0 = c->draw_start;
+                    float r = sqrtf(dx*dx + dy*dy);
+                    s.p1 = ImVec2(r, 0);
+                }
+                c->shapes.push_back(s);
+            }
+            c->drawing = false;
+        }
+    }
+
+    // cancel polygon with Escape
+    if (c->draw_mode == EM_SHAPE_POLYGON && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+        c->poly_wip.clear();
+        c->drawing = false;
+    }
+
+    // ---- Render -----------------------------------------------------------
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    dl->PushClipRect(ImVec2(0, 0), canvas_size, true);
+
+    // background
+    dl->AddRectFilled(ImVec2(0, 0), canvas_size, IM_COL32(18, 22, 30, 255));
+
+	drawgrid(dl, c);
+
+    // FDTD field visualization (behind shapes)
+    if (c->fdtd.initialized && c->fdtd.running) {
+        fdtd_draw_field(dl, c, canvas_size);
+    }
+
+    // committed shapes
+    for (int i = 0; i < (int)c->shapes.size(); i++) {
+        em_draw_shape(dl, c, &c->shapes[i], i == c->selected_idx);
+        // Draw edit handles for selected shape
+        if (i == c->selected_idx) {
+            em_draw_edit_handles(dl, c, &c->shapes[i]);
+        }
+    }
+    
+    // Draw sources
+    for (int i = 0; i < (int)c->sources.size(); i++) {
+        em_draw_source(dl, c, &c->sources[i], i == c->selected_source_idx);
+    }
+    
+    // Draw probes
+    for (int i = 0; i < (int)c->probes.size(); i++) {
+        em_draw_probe(dl, c, &c->probes[i], i == c->selected_probe_idx);
+    }
+
+    // preview while drawing
+    if (c->drawing) {
+        ImVec2 cur = mouse_canvas;
+        ImU32 prev_fill   = IM_COL32(100, 200, 255, 60);
+        ImU32 prev_border = IM_COL32(100, 200, 255, 200);
+
+        if (c->draw_mode == EM_SHAPE_RECT) {
+            ImVec2 a = em_canvas_to_screen(c, c->draw_start);
+            ImVec2 b = em_canvas_to_screen(c, cur);
+            dl->AddRectFilled(a, b, prev_fill);
+            dl->AddRect(a, b, prev_border, 0, 0, 1.5f);
+        } else if (c->draw_mode == EM_SHAPE_CIRCLE) {
+            ImVec2 ctr = em_canvas_to_screen(c, c->draw_start);
+            float dx = cur.x - c->draw_start.x, dy = cur.y - c->draw_start.y;
+            float r = sqrtf(dx*dx + dy*dy) * c->grid.scale;
+            dl->AddCircleFilled(ctr, r, prev_fill);
+            dl->AddCircle(ctr, r, prev_border, 64, 1.5f);
+        } else if (c->draw_mode == EM_SHAPE_POLYGON) {
+            // draw committed vertices + line to cursor
+            for (size_t i = 0; i + 1 < c->poly_wip.size(); i++) {
+                ImVec2 a = em_canvas_to_screen(c, c->poly_wip[i]);
+                ImVec2 b = em_canvas_to_screen(c, c->poly_wip[i+1]);
+                dl->AddLine(a, b, prev_border, 1.5f);
+            }
+            if (!c->poly_wip.empty()) {
+                ImVec2 last = em_canvas_to_screen(c, c->poly_wip.back());
+                ImVec2 mcur = em_canvas_to_screen(c, cur);
+                dl->AddLine(last, mcur, IM_COL32(100,200,255,120), 1.5f);
+            }
+            // vertex dots
+            for (auto& v : c->poly_wip) {
+                ImVec2 sv = em_canvas_to_screen(c, v);
+                dl->AddCircleFilled(sv, 4.0f, IM_COL32(100,200,255,255));
+            }
+        }
+    }
+
+    dl->PopClipRect();
+    ImGui::End();
+}
+
+inline void Dockspace(GLFWwindow* window, editor_t* editor, app_mode_t mode){
 	const ImGuiViewport* viewport = ImGui::GetMainViewport();
 	ImGui::SetNextWindowPos(viewport->Pos);
 	ImGui::SetNextWindowSize(viewport->Size);
@@ -690,36 +1256,40 @@ inline void Dockspace(GLFWwindow* window, editor_t* editor){
 	Menu();
 	ImGui::End();
 
-	ImGui::Begin("Simulation", NULL, ImGuiWindowFlags_None);
-	ImGui::Text("Text");
-	ImGui::Text("(%.1f FPS)", ImGui::GetIO().Framerate);
-	ImGui::End();
+	if(mode == MODE_CIRCUIT){
+		ImGui::Begin("Simulation", NULL, ImGuiWindowFlags_None);
+		ImGui::Text("Text");
+		ImGui::Text("(%.1f FPS)", ImGui::GetIO().Framerate);
+		ImGui::End();
 
-	ImGui::Begin("Properties", NULL, ImGuiWindowFlags_None);
-	ImGui::End();
+		ImGui::Begin("Properties", NULL, ImGuiWindowFlags_None);
+		ImGui::End();
 
-	ImGui::Begin("Explorer", NULL, ImGuiWindowFlags_None);
-	ImGui::Text("numnoded : %lu", get_num_nodes(editor));
-	for(size_t i = 0; i < editor->components.size(); i++){
-		ImGui::Text("%s %lu, pins:", editor->components[i].definition.name, editor->components[i].id);
-		ImGui::SameLine();
-		for(uint8_t j = 0; j < editor->components[i].definition.num_pins; j++){
-			ImGui::Text("%lu", editor->components[i].pins[j].connected_node ? editor->components[i].pins[j].connected_node->id : 420);
+		ImGui::Begin("Explorer", NULL, ImGuiWindowFlags_None);
+		ImGui::Text("numnoded : %lu", get_num_nodes(editor));
+		for(size_t i = 0; i < editor->components.size(); i++){
+			ImGui::Text("%s %lu, pins:", editor->components[i].definition.name, editor->components[i].id);
 			ImGui::SameLine();
+			for(uint8_t j = 0; j < editor->components[i].definition.num_pins; j++){
+				ImGui::Text("%lu", editor->components[i].pins[j].connected_node ? editor->components[i].pins[j].connected_node->id : 420);
+				ImGui::SameLine();
+			}
+			ImGui::NewLine();
 		}
-		ImGui::NewLine();
-	}
-	ImGui::End();
+		ImGui::End();
 
-	ImGui::Begin("Diagram", NULL, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-	processInput(window, editor);
-	ImDrawList* drawlist = ImGui::GetWindowDrawList();
-	drawgrid(drawlist, editor);
-	draw_comps(drawlist, editor);
-	drawlinks(drawlist, editor);
-	showeditormenu(editor);
-	show_comp_menu(editor);
-	ImGui::End();
+		ImGui::Begin("Diagram", NULL, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+		processInput(window, editor);
+		ImDrawList* drawlist = ImGui::GetWindowDrawList();
+		drawgrid(drawlist, editor);
+		draw_comps(drawlist, editor);
+		drawlinks(drawlist, editor);
+		showeditormenu(editor);
+		show_comp_menu(editor);
+		ImGui::End();
+	} else {
+		em_editor_panel(window, editor, dockspace_id);
+	}
 }
 
 #endif //GUI_H_
