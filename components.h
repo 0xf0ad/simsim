@@ -1,6 +1,7 @@
 #ifndef LOGICCOMP_H_
 #define LOGICCOMP_H_
 
+#include "imgui/imgui.h"
 #include <stdint.h>
 
 typedef struct{
@@ -107,6 +108,25 @@ component_def_t components[] = {
 	{curr_cont_curr_source, 2, "current controlled current source", "CCCS" /*soviet moment*/ },
 	{operational_amplifier, 3, "operational amplifier",             "OpAmp"},
 	{graph,                 2, "graph",                             "graph"}
+};
+
+// Material properties for a region
+struct em_material_t {
+	float conductivity;   // sigma  (S/m)  — 0 = perfect dielectric
+	float permittivity;   // eps_r  (relative)
+	float permeability;   // mu_r   (relative)
+	char  name[32];
+	ImVec4 color;         // RGBA fill color
+};
+
+static const em_material_t em_presets[] = {
+	{ 5.8e7f,  1.0f, 1.0f, "Copper",    ImVec4(1.00f, 0.75f, 0.20f, 0.55f) },
+	{ 3.5e7f,  1.0f, 1.0f, "Aluminum",  ImVec4(0.75f, 0.75f, 0.80f, 0.55f) },
+	{ 1.0e7f,  1.0f, 1.0f, "Iron",      ImVec4(0.55f, 0.55f, 0.60f, 0.55f) },
+	{ 0.0f,    2.2f, 1.0f, "PTFE",      ImVec4(0.90f, 0.90f, 0.95f, 0.45f) },
+	{ 0.0f,    4.5f, 1.0f, "FR4",       ImVec4(0.20f, 0.65f, 0.30f, 0.45f) },
+	{ 0.0f,    1.0f, 1.0f, "Air/Vacuum",ImVec4(0.50f, 0.80f, 1.00f, 0.15f) },
+	{ 1.0f,    80.f, 1.0f, "Water",     ImVec4(0.20f, 0.50f, 0.90f, 0.40f) },
 };
 
 #endif //LOGICCOMMP_H_

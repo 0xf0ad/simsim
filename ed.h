@@ -87,15 +87,6 @@ struct fdtd_grid_t {
     float max_field;      // For visualization scaling
 };
 
-// Material properties for a region
-struct em_material_t {
-    float conductivity;   // sigma  (S/m)  — 0 = perfect dielectric
-    float permittivity;   // eps_r  (relative)
-    float permeability;   // mu_r   (relative)
-    char  name[32];
-    ImVec4 color;         // RGBA fill color
-};
-
 // A single drawn shape
 struct em_shape_t {
     em_shape_type type;
@@ -155,7 +146,7 @@ typedef struct{
 
 
 inline bool mouse_over_quad(editor_t* editor, double x, double y, const Quad_t* quad){
-	bool result = 0;
+	bool result = false;
 	if (x <= (editor->grid.offset[0] + ((quad->pos[0] + (quad->dims[0] / 4.l)) * editor->grid.scale)))
 	if (x >= (editor->grid.offset[0] + ((quad->pos[0] - (quad->dims[0] / 4.l)) * editor->grid.scale)))
 	if (y >= (editor->grid.offset[1] + ((quad->pos[1] - (quad->dims[1] / 4.l)) * editor->grid.scale)))
