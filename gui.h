@@ -1007,7 +1007,7 @@ inline void em_editor_panel(GLFWwindow* window, editor_t* c, ImGuiID dsid) {
 	if (hovered && lclick) {
 		// Check if clicking on edit handle first
 		if (c->selected_idx >= 0 && c->selected_idx < (int)c->shapes.size()) {
-			double threshold = 10.l;
+			double threshold = 100 * c->grid.scale;
 			const em_shape_t* s = &c->shapes[c->selected_idx];
 
 			if (s->type == EM_SHAPE_RECT){
@@ -1075,8 +1075,8 @@ inline void em_editor_panel(GLFWwindow* window, editor_t* c, ImGuiID dsid) {
 					// Check sources
 					bool hit_src = false;
 					for (int i = (int)c->sources.size() - 1; i >= 0; i--) {
-						float dx = mouse_canvas.x - c->sources[i].pos.x;
-						float dy = mouse_canvas.y - c->sources[i].pos.y;
+						double dx = mouse_canvas.x - c->sources[i].pos.x;
+						double dy = mouse_canvas.y - c->sources[i].pos.y;
 						if (dx*dx + dy*dy < 0.3f*0.3f) {
 							c->selected_source_idx = i;
 							c->selected_idx = -1;
@@ -1089,8 +1089,8 @@ inline void em_editor_panel(GLFWwindow* window, editor_t* c, ImGuiID dsid) {
 					// Check probes
 					if (!hit_src) {
 						for (int i = (int)c->probes.size() - 1; i >= 0; i--) {
-							float dx = mouse_canvas.x - c->probes[i].pos.x;
-							float dy = mouse_canvas.y - c->probes[i].pos.y;
+							double dx = mouse_canvas.x - c->probes[i].pos.x;
+							double dy = mouse_canvas.y - c->probes[i].pos.y;
 							if (dx*dx + dy*dy < 0.3f*0.3f) {
 								c->selected_probe_idx = i;
 								c->selected_idx = -1;
@@ -1116,7 +1116,7 @@ inline void em_editor_panel(GLFWwindow* window, editor_t* c, ImGuiID dsid) {
 									break;
 								}
 								case EM_SHAPE_CIRCLE: {
-									float dx = mouse_canvas.x - c->shapes[i].p0.x, dy = mouse_canvas.y - c->shapes[i].p0.y;
+									double dx = mouse_canvas.x - c->shapes[i].p0.x, dy = mouse_canvas.y - c->shapes[i].p0.y;
 									doit = (dx*dx + dy*dy) <= c->shapes[i].p0.x * c->shapes[i].p0.x;
 									break;
 								}
@@ -1124,8 +1124,8 @@ inline void em_editor_panel(GLFWwindow* window, editor_t* c, ImGuiID dsid) {
 									bool inside = false;
 									size_t size = c->shapes[i].poly_pts.size();
 									for (size_t i = 0, j = size - 1; i < size; j = i++) {
-										float xi = c->shapes[i].poly_pts[i].x, yi = c->shapes[i].poly_pts[i].y;
-										float xj = c->shapes[i].poly_pts[j].x, yj = c->shapes[i].poly_pts[j].y;
+										double xi = c->shapes[i].poly_pts[i].x, yi = c->shapes[i].poly_pts[i].y;
+										double xj = c->shapes[i].poly_pts[j].x, yj = c->shapes[i].poly_pts[j].y;
 										if (((yi > mouse_canvas.y) != (yj > mouse_canvas.y)) &&
 											(mouse_canvas.x < (xj - xi) * (mouse_canvas.y - yi) / (yj - yi) + xi))
 											doit = !doit;
@@ -1156,26 +1156,22 @@ inline void em_editor_panel(GLFWwindow* window, editor_t* c, ImGuiID dsid) {
 
 	// Handle shape editing drag
 	if (c->editing_shape && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
-		if (c->selected_idx >= 0 && c->selected_idx < (int)c->shapes.size()) {
+		if (c->selected_idx != -1 && c->selected_idx < (int)c->shapes.size()) {
 			em_shape_t* s = &c->shapes[c->selected_idx];
-			if (s->type == EM_SHAPE_RECT) {
+			if (c->shapes[c->selected_idx].type == EM_SHAPE_RECT) {
 				// Update corner/edge based on handle
-				if (c->edit_handle == 0 || c->edit_handle == 1 || c->edit_handle == 2 || c->edit_handle == 7) {
-					s->p0.y = mouse_canvas.y;
-				}
-				if (c->edit_handle == 4 || c->edit_handle == 5 || c->edit_handle == 6 || c->edit_handle == 3) {
-					s->p1.y = mouse_canvas.y;
-				}
-				if (c->edit_handle == 0 || c->edit_handle == 6 || c->edit_handle == 7 || c->edit_handle == 1) {
-					s->p0.x = mouse_canvas.x;
-				}
-				if (c->edit_handle == 2 || c->edit_handle == 3 || c->edit_handle == 4 || c->edit_handle == 5) {
-					s->p1.x = mouse_canvas.x;
-				}
+				if (c->edit_handle == 0 || c->edit_handle == 1 || c->edit_handle == 2)
+					c->shapes[c->selected_idx].p0.y = mouse_canvas.y;
+				if (c->edit_handle == 4 || c->edit_handle == 5 || c->edit_handle == 6)
+					c->shapes[c->selected_idx].p1.y = mouse_canvas.y;
+				if (c->edit_handle == 0 || c->edit_handle == 6 || c->edit_handle == 7)
+					c->shapes[c->selected_idx].p0.x = mouse_canvas.x;
+				if (c->edit_handle == 2 || c->edit_handle == 3 || c->edit_handle == 4)
+					c->shapes[c->selected_idx].p1.x = mouse_canvas.x;
 			} else if (s->type == EM_SHAPE_CIRCLE) {
 				// Update radius
-				float dx = mouse_canvas.x - s->p0.x;
-				float dy = mouse_canvas.y - s->p0.y;
+				double dx = mouse_canvas.x - s->p0.x;
+				double dy = mouse_canvas.y - s->p0.y;
 				s->p1.x = sqrtf(dx*dx + dy*dy);
 			}
 		}
@@ -1190,8 +1186,8 @@ inline void em_editor_panel(GLFWwindow* window, editor_t* c, ImGuiID dsid) {
 	if (c->drawing && c->draw_mode != EM_SHAPE_POLYGON) {
 		if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
 			ImVec2 end = mouse_canvas;
-			float dx = end.x - c->draw_start.x;
-			float dy = end.y - c->draw_start.y;
+			double dx = end.x - c->draw_start.x;
+			double dy = end.y - c->draw_start.y;
 			bool big_enough = (dx*dx + dy*dy) > (4.0f / (c->grid.scale * c->grid.scale));
 			if (big_enough) {
 				em_shape_t s;

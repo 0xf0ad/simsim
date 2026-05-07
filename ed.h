@@ -135,7 +135,7 @@ typedef struct{
 	int  selected_idx;         // -1 = none (shape)
 	int  selected_source_idx;  // -1 = none
 	int  selected_probe_idx;   // -1 = none
-	
+
 	bool panning;
 	ImVec2 pan_last;
 
